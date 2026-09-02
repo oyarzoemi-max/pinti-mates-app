@@ -13,7 +13,7 @@ const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Publi
 const LOW_STOCK_DEFAULT = 5;
 
 function uid() {
-  return (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2)) + Date.now().toString(36);
+  return crypto.randomUUID();
 }
 
 function money(n) {
