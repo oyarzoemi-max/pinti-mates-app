@@ -177,14 +177,26 @@ export default async function handler(req, res) {
       }
 
       parts.push({
-        text:
-          "OBJETIVO: identificar cuál producto del inventario es el mismo objeto de la primera fotografía. " +
-          "La primera imagen es el producto fotografiado para vender. " +
-          "Después recibirás imágenes de productos del inventario, cada una precedida por su ID y nombre. " +
-          "Compará visualmente el objeto, no solamente el fondo o el ángulo. " +
-          "Prestá mucha atención a forma del mate, color del cuero, textura, virola, base, patas, bolitas, grabados, costuras y detalles únicos. " +
-          "Si una imagen es claramente el mismo producto aunque esté tomada desde otro ángulo, considerala coincidencia."
-      });
+  text:
+    "OBJETIVO: identificar si la primera fotografía corresponde EXACTAMENTE a uno de los productos del inventario. " +
+    "No buscamos productos parecidos ni de la misma categoría: buscamos el mismo modelo físico. " +
+
+    "COMPARÁ EN ESTE ORDEN DE IMPORTANCIA: " +
+    "1) VIROLA: ancho, forma, cincelado, dibujos geométricos, flores, soles, cruces, líneas y terminaciones. " +
+    "2) BASE Y PATAS: tipo de base, cantidad y forma de patas, bolitas, metal y ornamentación. " +
+    "3) CUERO O MATERIAL EXTERIOR: color, textura, costuras, estampado y terminación. " +
+    "4) FORMA DEL MATE: cuerpo, boca, proporciones y silueta. " +
+    "5) DETALLES ÚNICOS: grabados, marcas, irregularidades y cualquier elemento distintivo. " +
+
+    "REGLA CRÍTICA: dos mates pueden tener el mismo color, forma y material pero ser PRODUCTOS DIFERENTES si cambia la virola, el cincelado, la base, las patas o cualquier detalle ornamental importante. " +
+
+    "No elijas el producto por semejanza general. Compará los detalles individualmente. " +
+    "Si una característica importante de la foto no coincide con el candidato, descartalo. " +
+    "Si hay dos candidatos similares y no podés distinguir con seguridad cuál es el mismo producto, devolvé ninguna coincidencia. " +
+
+    "La primera imagen es la FOTO A IDENTIFICAR. " +
+    "Después recibirás las fotografías del inventario, cada una acompañada por su ID y nombre."
+});
 
       parts.push({
         text: "FOTO A IDENTIFICAR:"
@@ -239,7 +251,7 @@ export default async function handler(req, res) {
     "NO elijas un producto solamente porque sea parecido. " +
     "Debe coincidir el mismo objeto considerando simultáneamente forma, cuero, color, virola, base, patas, bolitas, grabados y detalles únicos. " +
     "Si existen diferencias importantes, devolvé productId null. " +
-    "Solo asigná confidence 90 o superior cuando estés muy seguro de que es exactamente el mismo producto. " +
+    "Asigná confidence según la certeza visual real. Usá 90 a 100 únicamente cuando coincidan claramente los detalles distintivos principales. " +
     "No agregues explicaciones."
 });
   }
