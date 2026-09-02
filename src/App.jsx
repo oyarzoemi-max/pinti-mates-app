@@ -21,28 +21,64 @@ function money(n) {
   return v.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function resizeImage(file, maxWidth = 480, quality = 0.72) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error("No se pudo leer la imagen"));
-    reader.onload = () => {
-      const img = new window.Image();
+async function resizeImage(file, maxDimension = 800, quality = 0.72) {
+  if (!file || !file.type?.startsWith("image/")) {
+    throw new Error("El archivo seleccionado no es una imagen");
+  }
+
+  // Evita intentar decodificar archivos desproporcionadamente grandes en móviles.
+  if (file.size > 25 * 1024 * 1024) {
+    throw new Error("La foto es demasiado pesada. Elegí una imagen de menos de 25 MB.");
+  }
+
+  const canvasToDataUrl = (source, sourceWidth, sourceHeight) => {
+    const scale = Math.min(1, maxDimension / Math.max(sourceWidth, sourceHeight));
+    const width = Math.max(1, Math.round(sourceWidth * scale));
+    const height = Math.max(1, Math.round(sourceHeight * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d", { alpha: false });
+    if (!ctx) throw new Error("No se pudo preparar la imagen");
+    ctx.drawImage(source, 0, 0, width, height);
+    const dataUrl = canvas.toDataURL("image/jpeg", quality);
+    canvas.width = 1;
+    canvas.height = 1;
+    return dataUrl;
+  };
+
+  // Camino preferido en Android/iOS modernos: el navegador reduce durante la
+  // decodificación y evita mantener una copia Base64 gigante de la foto original.
+  if (typeof createImageBitmap === "function") {
+    let bitmap;
+    try {
+      bitmap = await createImageBitmap(file, {
+        resizeWidth: maxDimension,
+        resizeQuality: "medium",
+        imageOrientation: "from-image"
+      });
+      return canvasToDataUrl(bitmap, bitmap.width, bitmap.height);
+    } catch (error) {
+      console.warn("createImageBitmap no pudo procesar la foto; usando método alternativo", error);
+    } finally {
+      if (bitmap?.close) bitmap.close();
+    }
+  }
+
+  // Compatibilidad para navegadores que no implementan createImageBitmap.
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const img = new window.Image();
+    img.decoding = "async";
+    await new Promise((resolve, reject) => {
+      img.onload = resolve;
       img.onerror = () => reject(new Error("No se pudo procesar la imagen"));
-      img.onload = () => {
-        const scale = Math.min(1, maxWidth / img.width);
-        const w = Math.round(img.width * scale);
-        const h = Math.round(img.height * scale);
-        const canvas = document.createElement("canvas");
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext("2d");
-        ctx.drawImage(img, 0, 0, w, h);
-        resolve(canvas.toDataURL("image/jpeg", quality));
-      };
-      img.src = reader.result;
-    };
-    reader.readAsDataURL(file);
-  });
+      img.src = objectUrl;
+    });
+    return canvasToDataUrl(img, img.naturalWidth || img.width, img.naturalHeight || img.height);
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
 }
 
 async function matchProductByPhoto(targetDataUrl, candidates) {
@@ -513,7 +549,9 @@ function FormularioProducto({ product, onSave, onCancel }) {
         setSuggesting(false);
       }
     } catch (e) {
-      setSuggestError("No se pudo procesar la foto.");
+      setSuggestError(e?.message || "No se pudo procesar la foto.");
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
@@ -801,7 +839,9 @@ function VentaPorFoto({ products, onRegister }) {
         setBuscando(false);
       }
     } catch (e) {
-      setMensaje({ type: "error", text: "No se pudo procesar la foto." });
+      setMensaje({ type: "error", text: e?.message || "No se pudo procesar la foto." });
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
