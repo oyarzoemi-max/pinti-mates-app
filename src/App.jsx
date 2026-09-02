@@ -622,13 +622,28 @@ function Inventario({ products, lowStockThreshold, onEdit, onDelete, onNuevo }) 
                     {p.stock}
                   </td>
                   <td style={{ ...styles.td, whiteSpace: "nowrap" }}>
-                    <button style={styles.iconButton} onClick={() => onEdit(p.id)} aria-label="Editar">
-                      <Pencil size={15} />
-                    </button>
-                    <button style={styles.iconButton} onClick={() => setConfirmDelete(p.id)} aria-label="Eliminar">
-                      <Trash2 size={15} />
-                    </button>
-                  </td>
+  <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
+    <button
+      style={styles.secondaryButton}
+      onClick={() => onEdit(p.id)}
+    >
+      <Pencil size={15} />
+      Modificar
+    </button>
+
+    <button
+      style={{
+        ...styles.secondaryButton,
+        borderColor: "#B23A34",
+        color: "#B23A34"
+      }}
+      onClick={() => setConfirmDelete(p.id)}
+    >
+      <Trash2 size={15} />
+      Eliminar
+    </button>
+  </div>
+</td>
                 </tr>
               ))}
             </tbody>
