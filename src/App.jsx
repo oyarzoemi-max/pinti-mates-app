@@ -87,24 +87,44 @@ async function matchProductByPhoto(targetDataUrl, candidates) {
   const BATCH_SIZE = 5;
   const limited = candidates.slice(0, 30);
 
-  for (let i = 0; i < limited.length; i += BATCH_SIZE) {
-    const batch = limited.slice(i, i + BATCH_SIZE);
-    const response = await fetch("/api/vision", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "match",
-        targetDataUrl,
-        candidates: batch.map((p) => ({ id: p.id, nombre: p.nombre, foto: p.foto }))
-      })
-    });
-    if (!response.ok) throw new Error("No se pudo analizar la foto");
-    const data = await response.json();
-    if (data.productId) return data.productId;
+  let bestMatch = null;
+let bestConfidence = 0;
 
-    // Cede el control al navegador entre lotes para liberar memoria.
-    await new Promise((resolve) => setTimeout(resolve, 0));
+for (let i = 0; i < limited.length; i += BATCH_SIZE) {
+  const batch = limited.slice(i, i + BATCH_SIZE);
+
+  const response = await fetch("/api/vision", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      action: "match",
+      targetDataUrl,
+      candidates: batch.map((p) => ({
+        id: p.id,
+        nombre: p.nombre,
+        foto: p.foto
+      }))
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error("No se pudo analizar la foto");
   }
+
+  const data = await response.json();
+  const confidence = Number(data.confidence || 0);
+
+  if (data.productId && confidence > bestConfidence) {
+    bestMatch = data.productId;
+    bestConfidence = confidence;
+  }
+
+  await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+if (bestMatch && bestConfidence >= 90) {
+  return bestMatch;
+}
 
   return null;
 }
