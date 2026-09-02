@@ -940,7 +940,7 @@ function VentaPorFoto({ products, onRegister }) {
     if (!file) return;
     reset();
     try {
-      const dataUrl = await resizeImage(file, 512, 0.62);
+      const dataUrl = await resizeImage(file, 320, 0.50 );
       setFoto(dataUrl);
       if (conFoto.length === 0) {
         setSinMatch(true);
