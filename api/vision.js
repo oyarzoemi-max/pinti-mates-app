@@ -42,16 +42,14 @@ function wait(ms) {
 
 async function callGemini(parts) {
   const models = [
-    "gemini-3.5-flash-lite",
-    "gemini-3.5-flash",
-    "gemini-3.6-flash",
-    "gemini-3.7-flash"
-  ];
+  "gemini-3.5-flash-lite",
+  "gemini-3.5-flash"
+];
 
   let lastError = null;
 
   for (const model of models) {
-    for (let attempt = 1; attempt <= 2; attempt++) {
+    for (let attempt = 1; attempt <= 1; attempt++) {
       try {
         console.log(
           `Probando Gemini modelo=${model} intento=${attempt}`
@@ -233,13 +231,18 @@ export default async function handler(req, res) {
       }
 
       parts.push({
-        text:
-          'Respondé EXCLUSIVAMENTE con JSON válido. ' +
-          'Formato obligatorio: {"productId":"ID"} si hay coincidencia. ' +
-          'Si ninguna coincide: {"productId":null}. ' +
-          "No agregues explicaciones."
-      });
-    }
+  text:
+    'Respondé EXCLUSIVAMENTE con JSON válido. ' +
+    'Formato obligatorio si hay coincidencia: {"productId":"ID","confidence":95}. ' +
+    'Si ninguna coincide con suficiente seguridad: {"productId":null,"confidence":0}. ' +
+    "confidence debe ser un número entero de 0 a 100. " +
+    "NO elijas un producto solamente porque sea parecido. " +
+    "Debe coincidir el mismo objeto considerando simultáneamente forma, cuero, color, virola, base, patas, bolitas, grabados y detalles únicos. " +
+    "Si existen diferencias importantes, devolvé productId null. " +
+    "Solo asigná confidence 90 o superior cuando estés muy seguro de que es exactamente el mismo producto. " +
+    "No agregues explicaciones."
+});
+  }
 
     else if (action === "suggest") {
       const { dataUrl } = req.body;
@@ -270,8 +273,18 @@ export default async function handler(req, res) {
     const data = await callGemini(parts);
     const parsed = extractGeminiJson(data);
 
-    return res.status(200).json(parsed);
+if (
+  action === "match" &&
+  parsed.productId &&
+  Number(parsed.confidence || 0) < 90
+) {
+  return res.status(200).json({
+    productId: null,
+    confidence: Number(parsed.confidence || 0)
+  });
+}
 
+return res.status(200).json(parsed);
   } catch (error) {
     console.error("Error vision final:", error);
 
