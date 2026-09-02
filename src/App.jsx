@@ -1705,7 +1705,14 @@ const styles = {
     border: "1px solid #E6D6BE", background: "#FFFFFF", borderRadius: 8, width: 32, height: 32,
     display: "inline-flex", alignItems: "center", justifyContent: "center", marginLeft: 6, color: "#2A1F17"
   },
-  tableWrap: { border: "1px solid #E6D6BE", borderRadius: 10, overflow: "hidden", background: "#FFFFFF" },
+  tableWrap: {
+  border: "1px solid #E6D6BE",
+  borderRadius: 10,
+  overflowX: "auto",
+  overflowY: "hidden",
+  WebkitOverflowScrolling: "touch",
+  background: "#FFFFFF"
+},
   table: { width: "100%", borderCollapse: "collapse", fontSize: 14 },
   th: { textAlign: "left", padding: "10px 14px", borderBottom: "1px solid #E6D6BE", color: "#8A6F52", fontWeight: 600, fontSize: 12.5 },
   td: { padding: "10px 14px", borderBottom: "1px solid #F3E7D3" },
