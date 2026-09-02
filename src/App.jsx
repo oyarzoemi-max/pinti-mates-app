@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import localforage from "localforage";
+import { supabase } from "./supabase";
 import {
   Home, Package, ShoppingCart, List, Plus, Camera, Search,
   Trash2, Pencil, ArrowLeft, Loader2, AlertTriangle, Check,
@@ -82,18 +82,31 @@ async function resizeImage(file, maxDimension = 800, quality = 0.72) {
 }
 
 async function matchProductByPhoto(targetDataUrl, candidates) {
-  const response = await fetch("/api/vision", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      action: "match",
-      targetDataUrl,
-      candidates: candidates.map((p) => ({ id: p.id, nombre: p.nombre, foto: p.foto }))
-    })
-  });
-  if (!response.ok) throw new Error("No se pudo analizar la foto");
-  const data = await response.json();
-  return data.productId || null;
+  // En móviles evitamos serializar muchas fotos Base64 de una sola vez.
+  // Se comparan en lotes pequeños para reducir los picos de memoria.
+  const BATCH_SIZE = 5;
+  const limited = candidates.slice(0, 30);
+
+  for (let i = 0; i < limited.length; i += BATCH_SIZE) {
+    const batch = limited.slice(i, i + BATCH_SIZE);
+    const response = await fetch("/api/vision", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "match",
+        targetDataUrl,
+        candidates: batch.map((p) => ({ id: p.id, nombre: p.nombre, foto: p.foto }))
+      })
+    });
+    if (!response.ok) throw new Error("No se pudo analizar la foto");
+    const data = await response.json();
+    if (data.productId) return data.productId;
+
+    // Cede el control al navegador entre lotes para liberar memoria.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
+  return null;
 }
 
 async function suggestFromPhoto(dataUrl) {
@@ -107,47 +120,163 @@ async function suggestFromPhoto(dataUrl) {
   return { nombre: data.nombre || "" };
 }
 
-function useStorageList(key) {
-  const [items, setItems] = useState([]);
-  const [ready, setReady] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const saved = await localforage.getItem(`pinti-mates:${key}`);
-        if (!cancelled) setItems(Array.isArray(saved) ? saved : []);
-      } catch (e) {
-        console.error("Error leyendo", key, e);
-        if (!cancelled) setItems([]);
-      } finally {
-        if (!cancelled) setReady(true);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [key]);
-
-  const persist = async (next) => {
-    setItems(next);
-    try {
-      await localforage.setItem(`pinti-mates:${key}`, next);
-    } catch (e) {
-      console.error("Error guardando", key, e);
-      throw e;
-    }
+function mapProduct(row) {
+  return {
+    id: row.id,
+    nombre: row.nombre || "",
+    precio: Number(row.precio) || 0,
+    costo: Number(row.costo) || 0,
+    stock: Number(row.stock) || 0,
+    proveedor: row.proveedor || "",
+    foto: row.foto || null,
+    creadoEn: row.created_at || null
   };
-  return [items, persist, ready];
 }
 
+function mapSale(row) {
+  return {
+    id: row.id,
+    productId: row.product_id,
+    nombre: row.nombre || "",
+    cantidad: Number(row.cantidad) || 0,
+    precioUnitario: Number(row.precio_unitario) || 0,
+    costoUnitario: Number(row.costo_unitario) || 0,
+    total: Number(row.total) || 0,
+    userId: row.user_id || null,
+    fecha: row.fecha
+  };
+}
+
+function mapAdjustment(row) {
+  return {
+    id: row.id,
+    tipo: row.tipo,
+    productoOriginalId: row.producto_original_id,
+    productoOriginalNombre: row.producto_original_nombre || "",
+    cantidadOriginal: Number(row.cantidad_original) || 0,
+    productoReemplazoId: row.producto_reemplazo_id || null,
+    productoReemplazoNombre: row.producto_reemplazo_nombre || null,
+    cantidadReemplazo: row.cantidad_reemplazo == null ? null : Number(row.cantidad_reemplazo),
+    comentario: row.comentario || "",
+    userId: row.user_id || null,
+    fecha: row.fecha
+  };
+}
+
+async function uploadProductPhoto(productId, foto, userId) {
+  if (!foto || !foto.startsWith("data:")) return foto || null;
+  const blob = await (await fetch(foto)).blob();
+  const ext = blob.type === "image/png" ? "png" : blob.type === "image/webp" ? "webp" : "jpg";
+  const path = `${userId}/${productId}.${ext}`;
+  const { error } = await supabase.storage.from("product-photos").upload(path, blob, {
+    upsert: true,
+    contentType: blob.type || "image/jpeg"
+  });
+  if (error) throw error;
+  const { data } = supabase.storage.from("product-photos").getPublicUrl(path);
+  return data.publicUrl;
+}
+
+function LoginScreen() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [nombre, setNombre] = useState("");
+  const [mode, setMode] = useState("login");
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setLoading(true); setMessage("");
+    try {
+      if (mode === "signup") {
+        const { error } = await supabase.auth.signUp({
+          email: email.trim(), password,
+          options: { data: { nombre: nombre.trim() } }
+        });
+        if (error) throw error;
+        setMessage("Cuenta creada. Si Supabase solicita confirmación, revisá tu correo y luego iniciá sesión.");
+        setMode("login");
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+        if (error) throw error;
+      }
+    } catch (e) {
+      setMessage(e?.message || "No se pudo iniciar sesión.");
+    } finally { setLoading(false); }
+  };
+
+  return (
+    <div style={{ minHeight: "100vh", background: "#F7F0E5", display: "grid", placeItems: "center", padding: 20, fontFamily: "'Public Sans', sans-serif" }}>
+      <style>{`${FONT_IMPORT} *{box-sizing:border-box}`}</style>
+      <form onSubmit={submit} style={{ width: "100%", maxWidth: 390, background: "#FFFDF9", border: "1px solid #E1D1BC", borderRadius: 10, padding: 24, boxShadow: "0 12px 35px rgba(80,50,25,.08)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 22 }}>
+          <img src={LOGO_DATA_URL} alt="Pinti Mates" style={{ width: 44, height: 44, objectFit: "contain" }} />
+          <div><div style={{ fontWeight: 800, fontSize: 20 }}>Pinti Mates</div><div style={{ color: "#8A6F52", fontSize: 13 }}>Inventario compartido</div></div>
+        </div>
+        {mode === "signup" && <Field label="Nombre"><input style={styles.input} value={nombre} onChange={e=>setNombre(e.target.value)} required /></Field>}
+        <Field label="Correo electrónico"><input type="email" style={styles.input} value={email} onChange={e=>setEmail(e.target.value)} required /></Field>
+        <Field label="Contraseña"><input type="password" minLength={6} style={styles.input} value={password} onChange={e=>setPassword(e.target.value)} required /></Field>
+        {message && <div style={{ marginBottom: 12, fontSize: 13, color: "#8B5A35", background: "#F6E7D3", padding: 10, borderRadius: 5 }}>{message}</div>}
+        <button disabled={loading} style={{ ...styles.primaryButton, width: "100%", justifyContent: "center" }}>{loading ? "Procesando…" : mode === "login" ? "Ingresar" : "Crear cuenta"}</button>
+        <button type="button" onClick={()=>{setMode(mode === "login" ? "signup" : "login"); setMessage("");}} style={{ ...styles.ghostButton, width: "100%", justifyContent: "center", marginTop: 10 }}>
+          {mode === "login" ? "Crear un usuario nuevo" : "Ya tengo cuenta"}
+        </button>
+      </form>
+    </div>
+  );
+}
 
 export default function App() {
-  const [products, setProducts, productsReady] = useStorageList("productos");
-  const [sales, setSales, salesReady] = useStorageList("ventas");
-  const [ajustes, setAjustes, ajustesReady] = useStorageList("ajustes");
+  const [session, setSession] = useState(null);
+  const [checking, setChecking] = useState(true);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => { setSession(data.session || null); setChecking(false); });
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, next) => { setSession(next); setChecking(false); });
+    return () => listener.subscription.unsubscribe();
+  }, []);
+
+  if (checking) return <div style={{ padding: 30, fontFamily: "sans-serif" }}>Cargando Pinti Mates…</div>;
+  if (!session) return <LoginScreen />;
+  return <BusinessApp session={session} />;
+}
+
+function BusinessApp({ session }) {
+  const [products, setProducts] = useState([]);
+  const [sales, setSales] = useState([]);
+  const [ajustes, setAjustes] = useState([]);
+  const [ready, setReady] = useState(false);
   const [view, setView] = useState("resumen");
   const [editingId, setEditingId] = useState(null);
   const [lowStockThreshold, setLowStockThreshold] = useState(LOW_STOCK_DEFAULT);
-  const ready = productsReady && salesReady && ajustesReady;
+
+  const loadAll = async () => {
+    const [pRes, sRes, aRes] = await Promise.all([
+      supabase.from("products").select("*").order("nombre"),
+      supabase.from("sales").select("*").order("fecha", { ascending: false }),
+      supabase.from("adjustments").select("*").order("fecha", { ascending: false })
+    ]);
+    const error = pRes.error || sRes.error || aRes.error;
+    if (error) throw error;
+    setProducts((pRes.data || []).map(mapProduct));
+    setSales((sRes.data || []).map(mapSale));
+    setAjustes((aRes.data || []).map(mapAdjustment));
+  };
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try { await loadAll(); } catch (e) { console.error(e); }
+      finally { if (active) setReady(true); }
+    })();
+    const channel = supabase.channel("pinti-mates-live")
+      .on("postgres_changes", { event: "*", schema: "public", table: "products" }, () => loadAll())
+      .on("postgres_changes", { event: "*", schema: "public", table: "sales" }, () => loadAll())
+      .on("postgres_changes", { event: "*", schema: "public", table: "adjustments" }, () => loadAll())
+      .subscribe();
+    return () => { active = false; supabase.removeChannel(channel); };
+  }, []);
 
   const totalStockValue = useMemo(
     () => products.reduce((sum, p) => sum + (Number(p.precio) || 0) * (Number(p.stock) || 0), 0),
@@ -165,62 +294,51 @@ export default function App() {
   const todayTotal = salesToday.reduce((sum, s) => sum + s.total, 0);
 
   const saveProduct = async (product) => {
-    const exists = products.some((p) => p.id === product.id);
-    const next = exists
-      ? products.map((p) => (p.id === product.id ? product : p))
-      : [...products, product];
-    await setProducts(next);
+    try {
+      const photoUrl = await uploadProductPhoto(product.id, product.foto, session.user.id);
+      const payload = {
+        id: product.id,
+        nombre: product.nombre,
+        precio: Number(product.precio) || 0,
+        costo: Number(product.costo) || 0,
+        stock: Math.max(0, Number(product.stock) || 0),
+        proveedor: product.proveedor || "",
+        foto: photoUrl
+      };
+      const { error } = await supabase.from("products").upsert(payload);
+      if (error) throw error;
+      await loadAll();
+    } catch (e) {
+      alert(`No se pudo guardar el producto: ${e?.message || e}`);
+      throw e;
+    }
   };
 
   const deleteProduct = async (id) => {
-    await setProducts(products.filter((p) => p.id !== id));
+    const { error } = await supabase.from("products").delete().eq("id", id);
+    if (error) { alert(`No se pudo eliminar: ${error.message}`); return; }
+    await loadAll();
   };
 
   const registerSale = async (productId, qty) => {
-    const product = products.find((p) => p.id === productId);
-    if (!product) return;
-    const newStock = (Number(product.stock) || 0) - qty;
-    await setProducts(products.map((p) => (p.id === productId ? { ...p, stock: newStock } : p)));
-    const sale = {
-      id: uid(),
-      productId,
-      nombre: product.nombre,
-      cantidad: qty,
-      precioUnitario: Number(product.precio) || 0,
-      costoUnitario: Number(product.costo) || 0,
-      total: (Number(product.precio) || 0) * qty,
-      fecha: new Date().toISOString()
-    };
-    await setSales([sale, ...sales]);
+    const { error } = await supabase.rpc("register_sale", { p_product_id: productId, p_qty: Number(qty) });
+    if (error) { alert(`No se pudo registrar la venta: ${error.message}`); return false; }
+    await loadAll();
+    return true;
   };
 
   const registrarAjuste = async ({ tipo, productoOriginalId, cantidadOriginal, productoReemplazoId, cantidadReemplazo, comentario }) => {
-    const original = products.find((p) => p.id === productoOriginalId);
-    if (!original) return;
-    let nextProducts = products.map((p) =>
-      p.id === productoOriginalId ? { ...p, stock: (Number(p.stock) || 0) - cantidadOriginal } : p
-    );
-    let reemplazo = null;
-    if (tipo === "cambio" && productoReemplazoId) {
-      reemplazo = products.find((p) => p.id === productoReemplazoId);
-      nextProducts = nextProducts.map((p) =>
-        p.id === productoReemplazoId ? { ...p, stock: (Number(p.stock) || 0) - cantidadReemplazo } : p
-      );
-    }
-    await setProducts(nextProducts);
-    const registro = {
-      id: uid(),
-      tipo,
-      productoOriginalId,
-      productoOriginalNombre: original.nombre,
-      cantidadOriginal,
-      productoReemplazoId: reemplazo ? productoReemplazoId : null,
-      productoReemplazoNombre: reemplazo ? reemplazo.nombre : null,
-      cantidadReemplazo: reemplazo ? cantidadReemplazo : null,
-      comentario: comentario.trim(),
-      fecha: new Date().toISOString()
-    };
-    await setAjustes([registro, ...ajustes]);
+    const { error } = await supabase.rpc("register_adjustment", {
+      p_tipo: tipo,
+      p_original_id: productoOriginalId,
+      p_cantidad_original: Number(cantidadOriginal),
+      p_reemplazo_id: tipo === "cambio" ? productoReemplazoId : null,
+      p_cantidad_reemplazo: tipo === "cambio" ? Number(cantidadReemplazo) : null,
+      p_comentario: comentario || ""
+    });
+    if (error) { alert(`No se pudo registrar el ajuste: ${error.message}`); return false; }
+    await loadAll();
+    return true;
   };
 
   const navItems = [
@@ -289,12 +407,19 @@ export default function App() {
           <Plus size={18} />
           <span>Nuevo producto</span>
         </button>
+        <button
+          style={{ ...styles.navButton, marginTop: 6, color: "#8A6F52" }}
+          onClick={() => supabase.auth.signOut()}
+        >
+          <span>Cerrar sesión</span>
+        </button>
       </nav>
 
       <main className="contenido-principal" style={styles.main}>
         <div className="barra-superior-movil no-imprimir" style={styles.mobileTopBar}>
           <img src={LOGO_DATA_URL} alt="Pinti Mates" style={styles.mobileTopLogo} />
           <span style={{ fontWeight: 700, fontSize: 15 }}>Pinti Mates</span>
+          <button onClick={() => supabase.auth.signOut()} style={{ marginLeft: "auto", border: 0, background: "transparent", color: "#8A6F52", fontSize: 12 }}>Salir</button>
         </div>
         {!ready ? (
           <div style={styles.loadingState}>
@@ -815,7 +940,7 @@ function VentaPorFoto({ products, onRegister }) {
     if (!file) return;
     reset();
     try {
-      const dataUrl = await resizeImage(file);
+      const dataUrl = await resizeImage(file, 512, 0.62);
       setFoto(dataUrl);
       if (conFoto.length === 0) {
         setSinMatch(true);
