@@ -456,7 +456,62 @@ function BusinessApp({ session }) {
           <NuevaVenta products={products} sales={sales} onRegister={registerSale} />
         ) : view === "ventaFoto" ? (
           <VentaPorFoto products={products} onRegister={registerSale} />
-        ) : view === "cambios" ? (
+     ) : view === "mas" ? (
+  <div>
+    <PageHeader
+      title="Más opciones"
+      subtitle="Administración y herramientas"
+    />
+
+    <div style={{ display: "grid", gap: 12 }}>
+      <button
+        style={styles.secondaryButton}
+        onClick={() => {
+          setEditingId("new");
+          setView("nuevo");
+        }}
+      >
+        <Plus size={18} />
+        Nuevo producto
+      </button>
+
+      <button
+        style={styles.secondaryButton}
+        onClick={() => setView("cambios")}
+      >
+        <RefreshCcw size={18} />
+        Cambios y bajas
+      </button>
+
+      <button
+        style={styles.secondaryButton}
+        onClick={() => setView("precios")}
+      >
+        <List size={18} />
+        Lista de precios
+      </button>
+
+      <button
+        style={styles.secondaryButton}
+        onClick={() => setView("estadisticas")}
+      >
+        <BarChart3 size={18} />
+        Estadísticas
+      </button>
+
+      <button
+        style={{
+          ...styles.secondaryButton,
+          color: "#B23A34",
+          borderColor: "#B23A34"
+        }}
+        onClick={() => supabase.auth.signOut()}
+      >
+        Cerrar sesión
+      </button>
+    </div>
+  </div>   
+    ) : view === "cambios" ? (
           <CambiosBajas products={products} ajustes={ajustes} onRegistrarAjuste={registrarAjuste} />
         ) : view === "precios" ? (
           <ListaPrecios products={products} />
