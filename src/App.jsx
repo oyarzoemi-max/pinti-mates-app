@@ -323,7 +323,17 @@ function BusinessApp({ session }) {
         costo: Number(product.costo) || 0,
         stock: Math.max(0, Number(product.stock) || 0),
         proveedor: product.proveedor || "",
-        foto: photoUrl
+modelo: product.modelo || "",
+material: product.material || "",
+color: product.color || "",
+terminacion: product.terminacion || "",
+virola: product.virola || "",
+guarda: product.guarda || "",
+base: product.base || "",
+patas: product.patas || "",
+bolitas: product.bolitas || "",
+detalles: product.detalles || "",
+foto: photoUrl
       };
       const { error } = await supabase.from("products").upsert(payload);
       if (error) throw error;
@@ -743,6 +753,16 @@ function FormularioProducto({ product, onSave, onCancel }) {
   const [costo, setCosto] = useState(product?.costo ?? "");
   const [stock, setStock] = useState(product?.stock ?? "");
   const [proveedor, setProveedor] = useState(product?.proveedor || "");
+  const [modelo, setModelo] = useState(product?.modelo || "");
+const [material, setMaterial] = useState(product?.material || "");
+const [color, setColor] = useState(product?.color || "");
+const [terminacion, setTerminacion] = useState(product?.terminacion || "");
+const [virola, setVirola] = useState(product?.virola || "");
+const [guarda, setGuarda] = useState(product?.guarda || "");
+const [base, setBase] = useState(product?.base || "");
+const [patas, setPatas] = useState(product?.patas || "");
+const [bolitas, setBolitas] = useState(product?.bolitas || "");
+const [detalles, setDetalles] = useState(product?.detalles || "");
   const [foto, setFoto] = useState(product?.foto || null);
   const [suggesting, setSuggesting] = useState(false);
   const [suggestError, setSuggestError] = useState("");
