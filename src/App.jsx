@@ -801,9 +801,18 @@ const [detalles, setDetalles] = useState(product?.detalles || "");
       precio: Number(precio),
       costo: costo === "" ? 0 : Number(costo),
       stock: Number(stock),
-      proveedor: proveedor.trim(),
-      foto,
-      creadoEn: product?.creadoEn || new Date().toISOString()
+     proveedor: proveedor.trim(),
+modelo: modelo.trim(),
+material: material.trim(),
+color: color.trim(),
+terminacion: terminacion.trim(),
+virola: virola.trim(),
+guarda: guarda.trim(),
+base: base.trim(),
+patas: patas.trim(),
+bolitas: bolitas.trim(),
+detalles: detalles.trim(),
+foto,
     });
   };
 
@@ -874,6 +883,95 @@ const [detalles, setDetalles] = useState(product?.detalles || "");
           </Field>
         </div>
         <Field label="Stock inicial">
+          <Field label="Modelo">
+  <input
+    style={styles.input}
+    value={modelo}
+    onChange={(e) => setModelo(e.target.value)}
+    placeholder="Ej: Imperial, Torpedo, Camionero"
+  />
+</Field>
+
+<Field label="Material">
+  <input
+    style={styles.input}
+    value={material}
+    onChange={(e) => setMaterial(e.target.value)}
+    placeholder="Ej: cuero crudo, cuero, piel"
+  />
+</Field>
+
+<Field label="Color">
+  <input
+    style={styles.input}
+    value={color}
+    onChange={(e) => setColor(e.target.value)}
+    placeholder="Ej: blanco, negro, marrón"
+  />
+</Field>
+
+<Field label="Terminación">
+  <input
+    style={styles.input}
+    value={terminacion}
+    onChange={(e) => setTerminacion(e.target.value)}
+    placeholder="Ej: liso, pujado"
+  />
+</Field>
+
+<Field label="Virola">
+  <input
+    style={styles.input}
+    value={virola}
+    onChange={(e) => setVirola(e.target.value)}
+    placeholder="Ej: alpaca cincelada"
+  />
+</Field>
+
+<Field label="Guarda lateral">
+  <input
+    style={styles.input}
+    value={guarda}
+    onChange={(e) => setGuarda(e.target.value)}
+    placeholder="Ej: acero cincelado"
+  />
+</Field>
+
+<Field label="Base">
+  <input
+    style={styles.input}
+    value={base}
+    onChange={(e) => setBase(e.target.value)}
+    placeholder="Ej: cuero, alpaca completa"
+  />
+</Field>
+
+<Field label="Patas / botitas">
+  <input
+    style={styles.input}
+    value={patas}
+    onChange={(e) => setPatas(e.target.value)}
+    placeholder="Ej: acero, alpaca"
+  />
+</Field>
+
+<Field label="Bolitas">
+  <input
+    style={styles.input}
+    value={bolitas}
+    onChange={(e) => setBolitas(e.target.value)}
+    placeholder="Ej: bronce"
+  />
+</Field>
+
+<Field label="Detalles adicionales">
+  <input
+    style={styles.input}
+    value={detalles}
+    onChange={(e) => setDetalles(e.target.value)}
+    placeholder="Detalles especiales del fabricante"
+  />
+</Field>
           <input type="number" step="1" min="0" style={styles.input} value={stock} onChange={(e) => setStock(e.target.value)} placeholder="0" />
         </Field>
 
