@@ -882,7 +882,6 @@ foto,
       <option key={prov} value={prov} />
     ))}
   </datalist>
-</Field>
           </Field>
         </div>
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
@@ -894,6 +893,16 @@ foto,
           </Field>
         </div>
         <Field label="Stock inicial">
+  <input
+    type="number"
+    step="1"
+    min="0"
+    style={styles.input}
+    value={stock}
+    onChange={(e) => setStock(e.target.value)}
+    placeholder="0"
+  />
+</Field>
           <Field label="Modelo">
   <input
     style={styles.input}
