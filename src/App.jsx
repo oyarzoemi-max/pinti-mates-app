@@ -1361,7 +1361,7 @@ const buscarProducto = async () => {
   accept="image/*"
   capture="environment"
   style={{ display: "none" }}
-  onChange={(e) => handlePhoto(e.target.files?.[0])}
+  onChange={(e) => handleFoto(e.target.files?.[0])}
 />
 
 <button
