@@ -1157,7 +1157,67 @@ function VentaPorFoto({ products, onRegister }) {
   const [ventaConfirmada, setVentaConfirmada] = useState(null);
   const [busquedaManual, setBusquedaManual] = useState("");
   const fileInputRef = useRef(null);
+const [camaraActiva, setCamaraActiva] = useState(false);
+const videoRef = useRef(null);
+const streamRef = useRef(null);
+  const abrirCamara = async () => {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { ideal: "environment" },
+        width: { ideal: 1280 },
+        height: { ideal: 720 }
+      },
+      audio: false
+    });
 
+    streamRef.current = stream;
+    setCamaraActiva(true);
+
+    setTimeout(() => {
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play();
+      }
+    }, 100);
+  } catch (error) {
+    console.error(error);
+    setMensaje("No se pudo abrir la cámara. Revisá el permiso de cámara.");
+  }
+};
+
+const cerrarCamara = () => {
+  if (streamRef.current) {
+    streamRef.current.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+  }
+  setCamaraActiva(false);
+};
+  const capturarFoto = async () => {
+  const video = videoRef.current;
+  if (!video || !video.videoWidth || !video.videoHeight) return;
+
+  const maxWidth = 960;
+  const scale = Math.min(1, maxWidth / video.videoWidth);
+
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(video.videoWidth * scale);
+  canvas.height = Math.round(video.videoHeight * scale);
+
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+  canvas.toBlob(async (blob) => {
+    if (!blob) return;
+
+    const file = new File([blob], "foto-mate.jpg", {
+      type: "image/jpeg"
+    });
+
+    cerrarCamara();
+    await handlePhoto(file);
+  }, "image/jpeg", 0.72);
+};
   const conFoto = products.filter((p) => p.foto);
 
   const reset = () => {
@@ -1246,17 +1306,47 @@ function VentaPorFoto({ products, onRegister }) {
           </div>
         ) : !foto ? (
           <div style={{ textAlign: "center", padding: "20px 0" }}>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              style={{ display: "none" }}
-              onChange={(e) => handleFoto(e.target.files?.[0])}
-            />
-            <button style={styles.primaryButton} onClick={() => fileInputRef.current?.click()}>
-              <Camera size={16} /> Sacar foto del producto
-            </button>
+            {!camaraActiva ? (
+  <button
+    type="button"
+    style={styles.primaryButton}
+    onClick={abrirCamara}
+  >
+    <Camera size={16} /> Sacar foto del producto
+  </button>
+) : (
+  <div style={{ display: "grid", gap: 12 }}>
+    <video
+      ref={videoRef}
+      autoPlay
+      playsInline
+      muted
+      style={{
+        width: "100%",
+        maxHeight: 420,
+        borderRadius: 12,
+        background: "#000",
+        objectFit: "cover"
+      }}
+    />
+
+    <button
+      type="button"
+      style={styles.primaryButton}
+      onClick={capturarFoto}
+    >
+      <Camera size={16} /> Capturar foto
+    </button>
+
+    <button
+      type="button"
+      style={styles.ghostButton}
+      onClick={cerrarCamara}
+    >
+      Cancelar
+    </button>
+  </div>
+)}
             <div style={{ fontSize: 13, color: "#8A6F52", marginTop: 12 }}>
               Buscamos el producto comparando la foto con las que ya cargaste en el inventario.
             </div>
