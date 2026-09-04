@@ -1359,7 +1359,6 @@ const buscarProducto = async () => {
   ref={fileInputRef}
   type="file"
   accept="image/*"
-  capture="environment"
   style={{ display: "none" }}
   onChange={(e) => handlePhoto(e.target.files?.[0])}
 />
