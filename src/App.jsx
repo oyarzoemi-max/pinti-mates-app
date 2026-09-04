@@ -748,7 +748,7 @@ function Inventario({ products, lowStockThreshold, onEdit, onDelete, onNuevo }) 
   );
 }
 
-function FormularioProducto({ product, onSave, onCancel }) {
+function FormularioProducto({ product, products, onSave, onCancel }) {
   const [nombre, setNombre] = useState(product?.nombre || "");
   const [precio, setPrecio] = useState(product?.precio ?? "");
   const [costo, setCosto] = useState(product?.costo ?? "");
