@@ -1312,47 +1312,22 @@ const cerrarCamara = () => {
           </div>
         ) : !foto ? (
           <div style={{ textAlign: "center", padding: "20px 0" }}>
-            {!camaraActiva ? (
-  <button
-    type="button"
-    style={styles.primaryButton}
-    onClick={abrirCamara}
-  >
-    <Camera size={16} /> Sacar foto del producto
-  </button>
-) : (
-  <div style={{ display: "grid", gap: 12 }}>
-    <video
-      ref={videoRef}
-      autoPlay
-      playsInline
-      muted
-      style={{
-        width: "100%",
-        maxHeight: 420,
-        borderRadius: 12,
-        background: "#000",
-        objectFit: "cover"
-      }}
-    />
+            <input
+  ref={fileInputRef}
+  type="file"
+  accept="image/*"
+  capture="environment"
+  style={{ display: "none" }}
+  onChange={(e) => handlePhoto(e.target.files?.[0])}
+/>
 
-    <button
-      type="button"
-      style={styles.primaryButton}
-      onClick={capturarFoto}
-    >
-      <Camera size={16} /> Capturar foto
-    </button>
-
-    <button
-      type="button"
-      style={styles.ghostButton}
-      onClick={cerrarCamara}
-    >
-      Cancelar
-    </button>
-  </div>
-)}
+<button
+  type="button"
+  style={styles.primaryButton}
+  onClick={() => fileInputRef.current?.click()}
+>
+  <Camera size={16} /> Sacar foto del producto
+</button>
             <div style={{ fontSize: 13, color: "#8A6F52", marginTop: 12 }}>
               Buscamos el producto comparando la foto con las que ya cargaste en el inventario.
             </div>
