@@ -65,9 +65,27 @@ async function resizeImage(file, maxDimension = 800, quality = 0.72) {
     }
   }
 
-  throw new Error(
-  "No se pudo procesar la foto de forma segura. Intentá tomarla nuevamente."
-);
+  const objectUrl = URL.createObjectURL(file);
+
+try {
+  const img = new Image();
+  img.decoding = "async";
+
+  await new Promise((resolve, reject) => {
+    img.onload = resolve;
+    img.onerror = () =>
+      reject(new Error("No se pudo procesar la imagen"));
+    img.src = objectUrl;
+  });
+
+  return canvasToDataUrl(
+    img,
+    img.naturalWidth || img.width,
+    img.naturalHeight || img.height
+  );
+} finally {
+  URL.revokeObjectURL(objectUrl);
+}
 }
 
 async function matchProductByPhoto(targetDataUrl, candidates) {
