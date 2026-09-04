@@ -1255,6 +1255,7 @@ const cerrarCamara = () => {
     try {
       const dataUrl = await resizeImage(file, 320, 0.50 );
       setFoto(dataUrl);
+      await new Promise((resolve) => setTimeout(resolve, 300));
       if (conFoto.length === 0) {
         setSinMatch(true);
         return;
