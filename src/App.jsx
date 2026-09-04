@@ -277,7 +277,11 @@ function BusinessApp({ session }) {
   const [sales, setSales] = useState([]);
   const [ajustes, setAjustes] = useState([]);
   const [ready, setReady] = useState(false);
-  const [view, setView] = useState("resumen");
+  const [view, setView] = useState(() => localStorage.getItem("pinti-view") || "resumen");
+
+useEffect(() => {
+  localStorage.setItem("pinti-view", view);
+}, [view]);
   const [editingId, setEditingId] = useState(null);
   const [lowStockThreshold, setLowStockThreshold] = useState(LOW_STOCK_DEFAULT);
 
