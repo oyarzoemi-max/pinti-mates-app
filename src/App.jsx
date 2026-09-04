@@ -478,6 +478,7 @@ foto: photoUrl
           />
         ) : view === "nuevo" ? (
           <FormularioProducto
+            products={products}
             product={editingId && editingId !== "new" ? products.find((p) => p.id === editingId) : null}
             onSave={async (p) => { await saveProduct(p); setView("inventario"); }}
             onCancel={() => setView("inventario")}
@@ -863,15 +864,25 @@ foto,
           <Field label="Nombre del producto" style={{ flex: 1, minWidth: 200 }}>
             <input style={styles.input} value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Ej: Detergente 750ml" required />
           </Field>
-          <Field label="Proveedor" style={{ width: 76 }}>
-            <input
-              style={{ ...styles.input, textAlign: "center", fontFamily: "'JetBrains Mono', monospace" }}
-              value={proveedor}
-              onChange={(e) => setProveedor(e.target.value.replace(/\D/g, "").slice(0, 2))}
-              placeholder="00"
-              inputMode="numeric"
-              maxLength={2}
-            />
+          <Field label="Proveedor" style={{ flex: 1, minWidth: 180 }}>
+  <input
+    style={styles.input}
+    value={proveedor}
+    onChange={(e) => setProveedor(e.target.value)}
+    placeholder="Ej: Fabricante / Proveedor"
+    list="lista-proveedores"
+  />
+
+  <datalist id="lista-proveedores">
+    {[...new Set(
+      products
+        .map((p) => p.proveedor)
+        .filter(Boolean)
+    )].sort().map((prov) => (
+      <option key={prov} value={prov} />
+    ))}
+  </datalist>
+</Field>
           </Field>
         </div>
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
