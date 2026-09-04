@@ -90,7 +90,7 @@ try {
 async function matchProductByPhoto(targetDataUrl, candidates) {
   // En móviles evitamos serializar muchas fotos Base64 de una sola vez.
   // Se comparan en lotes pequeños para reducir los picos de memoria.
-  const BATCH_SIZE = 1;
+  const BATCH_SIZE = 10;
   const limited = candidates.slice(0, 30);
 
   let bestMatch = null;
