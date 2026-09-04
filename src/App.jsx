@@ -1164,27 +1164,371 @@ function NuevaVenta({ products, sales, onRegister }) {
   );
 }
 
+/**
+ * REEMPLAZO del componente VentaPorFoto en tu App.jsx.
+ *
+ * Qué cambia respecto al original:
+ * 1) Bug arreglado: antes el botón "Buscar producto" estaba dentro de una rama
+ *    del JSX que solo se mostraba cuando NO había foto, así que nunca se
+ *    ejecutaba. Ahora la búsqueda se dispara automáticamente al capturar.
+ * 2) Cámara en vivo: se abre sola al entrar a la pantalla (getUserMedia),
+ *    con un botón "Escanear producto" que congela el frame actual y lo manda
+ *    a analizar. Reemplaza al <input type="file"> + selector nativo.
+ * 3) Flujo continuo tipo scanner: al confirmar una venta, vuelve sola al modo
+ *    cámara después de ~1.4s para escanear el siguiente producto, sin que
+ *    tengas que tocar "escanear otro" cada vez.
+ * 4) La cámara se abre una sola vez al entrar a la vista y se cierra al salir
+ *    (no se reabre entre cada escaneo), para que el flujo sea rápido.
+ *
+ * No toqué: resizeImage, matchProductByPhoto, suggestFromPhoto, styles,
+ * money(), etc. — siguen definidos donde ya estaban en tu App.jsx. Este
+ * archivo SOLO reemplaza la función VentaPorFoto completa.
+ */
+
 function VentaPorFoto({ products, onRegister }) {
-  const [foto, setFoto] = useState(null);
+  const [foto, setFoto] = useState(null); // frame congelado mientras se busca/confirma
   const [buscando, setBuscando] = useState(false);
   const [match, setMatch] = useState(null);
   const [sinMatch, setSinMatch] = useState(false);
   const [qty, setQty] = useState(1);
   const [mensaje, setMensaje] = useState(null);
   const [ventaConfirmada, setVentaConfirmada] = useState(null);
+  const [registrando, setRegistrando] = useState(false);
   const [busquedaManual, setBusquedaManual] = useState("");
-  const fileInputRef = useRef(null);
-const [camaraActiva, setCamaraActiva] = useState(false);
-const videoRef = useRef(null);
-const streamRef = useRef(null);
+
+  const [camaraLista, setCamaraLista] = useState(false);
+  const [errorCamara, setErrorCamara] = useState(null);
+  const videoRef = useRef(null);
+  const streamRef = useRef(null);
+
+  const conFoto = products.filter((p) => p.foto);
+
+  // ---------- Ciclo de vida de la cámara ----------
   const abrirCamara = async () => {
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: { ideal: "environment" },
-        width: { ideal: 1280 },
-        height: { ideal: 720 }
-      },
+    setErrorCamara(null);
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setErrorCamara("Este navegador no soporta acceso a la cámara.");
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: { ideal: "environment" },
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        },
+        audio: false
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+      setCamaraLista(true);
+    } catch (error) {
+      console.error(error);
+      setErrorCamara("No se pudo abrir la cámara. Revisá los permisos de cámara del navegador.");
+      setCamaraLista(false);
+    }
+  };
+
+  const cerrarCamara = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    setCamaraLista(false);
+  };
+
+  // Abre la cámara al entrar a esta pantalla, la cierra al salir de ella.
+  useEffect(() => {
+    abrirCamara();
+    return () => cerrarCamara();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ---------- Captura + búsqueda automática ----------
+  const capturarFoto = async () => {
+    const video = videoRef.current;
+    if (!video || !video.videoWidth || !video.videoHeight) return;
+
+    const maxWidth = 640;
+    const scale = Math.min(1, maxWidth / video.videoWidth);
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(video.videoWidth * scale);
+    canvas.height = Math.round(video.videoHeight * scale);
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.75);
+
+    setFoto(dataUrl);
+    setMatch(null);
+    setSinMatch(false);
+    setMensaje(null);
+    setVentaConfirmada(null);
+    setBusquedaManual("");
+
+    if (conFoto.length === 0) {
+      setSinMatch(true);
+      return;
+    }
+
+    setBuscando(true);
+    try {
+      const candidates = conFoto.slice(0, 30);
+      const productId = await matchProductByPhoto(dataUrl, candidates);
+      const found = productId ? products.find((p) => p.id === productId) : null;
+      if (found) {
+        setMatch(found);
+        setQty(1);
+      } else {
+        setSinMatch(true);
+      }
+    } catch (e) {
+      setMensaje({ type: "error", text: "No se pudo identificar el producto automáticamente." });
+      setSinMatch(true);
+    } finally {
+      setBuscando(false);
+    }
+  };
+
+  const volverAEscanear = () => {
+    setFoto(null);
+    setMatch(null);
+    setSinMatch(false);
+    setQty(1);
+    setMensaje(null);
+    setVentaConfirmada(null);
+    setBusquedaManual("");
+  };
+
+  const confirmar = async () => {
+    if (!match || registrando) return;
+    if (qty <= 0) return;
+    if (qty > match.stock) {
+      setMensaje({ type: "error", text: `Solo hay ${match.stock} unidades disponibles.` });
+      return;
+    }
+    setRegistrando(true);
+    const ok = await onRegister(match.id, qty);
+    setRegistrando(false);
+    if (ok === false) return; // el error ya se muestra desde registerSale (alert)
+
+    setVentaConfirmada({ nombre: match.nombre, cantidad: qty, total: match.precio * qty });
+
+    // Vuelve sola al modo escaneo para encadenar la próxima venta.
+    setTimeout(() => {
+      volverAEscanear();
+    }, 1400);
+  };
+
+  const filtradosManual = products.filter((p) =>
+    p.nombre.toLowerCase().includes(busquedaManual.toLowerCase())
+  );
+
+  return (
+    <div style={{ maxWidth: 480 }}>
+      <PageHeader title="Venta por foto" subtitle="Apuntá al producto y tocá Escanear" />
+
+      {conFoto.length === 0 && (
+        <div style={{
+          marginBottom: 16, padding: "10px 12px", borderRadius: 4, fontSize: 13,
+          background: "#FDF3E7", color: "#CE9B3F"
+        }}>
+          Todavía no hay productos con foto cargada en el inventario. Este método funciona mejor cuando los productos tienen foto.
+        </div>
+      )}
+
+      <div style={styles.panel}>
+        {/* Vista de cámara en vivo */}
+        {!foto && (
+          <div>
+            <div style={{
+              position: "relative", width: "100%", aspectRatio: "4 / 3",
+              background: "#111", borderRadius: 8, overflow: "hidden"
+            }}>
+              <video
+                ref={videoRef}
+                playsInline
+                muted
+                style={{ width: "100%", height: "100%", objectFit: "cover", display: camaraLista ? "block" : "none" }}
+              />
+              {!camaraLista && !errorCamara && (
+                <div style={{
+                  position: "absolute", inset: 0, display: "flex", alignItems: "center",
+                  justifyContent: "center", color: "#FFF", fontSize: 13
+                }}>
+                  <Loader2 size={18} style={{ animation: "spin 1s linear infinite", marginRight: 8 }} />
+                  Abriendo cámara…
+                </div>
+              )}
+              {errorCamara && (
+                <div style={{
+                  position: "absolute", inset: 0, display: "flex", flexDirection: "column", gap: 10,
+                  alignItems: "center", justifyContent: "center", color: "#FFF", fontSize: 13,
+                  padding: 20, textAlign: "center"
+                }}>
+                  {errorCamara}
+                  <button style={styles.secondaryButton} onClick={abrirCamara}>Reintentar</button>
+                </div>
+              )}
+            </div>
+
+            <button
+              type="button"
+              style={{ ...styles.primaryButton, width: "100%", justifyContent: "center", marginTop: 14 }}
+              onClick={capturarFoto}
+              disabled={!camaraLista}
+            >
+              <Camera size={18} /> Escanear producto
+            </button>
+
+            <div style={{ fontSize: 13, color: "#8A6F52", marginTop: 10, textAlign: "center" }}>
+              Buscamos el producto comparando la foto con las que ya cargaste en el inventario.
+            </div>
+          </div>
+        )}
+
+        {/* Resultado tras capturar */}
+        {foto && !ventaConfirmada && (
+          <div>
+            <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
+              <img
+                src={match?.foto || foto}
+                alt="Producto"
+                style={{ width: 72, height: 72, borderRadius: 4, objectFit: "cover", flexShrink: 0 }}
+              />
+              <div style={{ flex: 1 }}>
+                {buscando ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#8A6F52", fontSize: 14 }}>
+                    <Loader2 size={16} style={{ animation: "spin 1s linear infinite" }} />
+                    Buscando en el inventario…
+                  </div>
+                ) : match ? (
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 16 }}>{match.nombre}</div>
+                    <div style={{ color: "#8A6F52", fontSize: 13, marginTop: 2 }}>
+                      ${money(match.precio)} · {match.stock} disponibles
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 14, color: "#B23A34" }}>
+                    No se encontró un producto que coincida con esta foto.
+                  </div>
+                )}
+              </div>
+              <button style={styles.iconButton} onClick={volverAEscanear} aria-label="Cancelar">
+                <X size={16} />
+              </button>
+            </div>
+
+            {!buscando && match && (
+              <>
+                <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 20 }}>
+                  <span style={{ fontSize: 13, color: "#8A6F52" }}>Cantidad</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <button style={styles.stepperButton} onClick={() => setQty((q) => Math.max(1, q - 1))}>
+                      <Minus size={14} />
+                    </button>
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 18, minWidth: 28, textAlign: "center" }}>
+                      {qty}
+                    </span>
+                    <button style={styles.stepperButton} onClick={() => setQty((q) => Math.min(match.stock, q + 1))}>
+                      <Plus size={14} />
+                    </button>
+                  </div>
+                </div>
+                <div style={{ marginTop: 16, fontSize: 15 }}>
+                  Total: <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700 }}>
+                    ${money(match.precio * qty)}
+                  </span>
+                </div>
+                <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
+                  <button style={styles.primaryButton} onClick={confirmar} disabled={registrando}>
+                    <Check size={16} /> {registrando ? "Registrando…" : "Confirmar venta"}
+                  </button>
+                  <button style={styles.ghostButton} onClick={() => { setMatch(null); setSinMatch(true); }}>
+                    No es este producto
+                  </button>
+                </div>
+              </>
+            )}
+
+            {!buscando && sinMatch && (
+              <div style={{ marginTop: 20 }}>
+                <div style={{ fontSize: 13, color: "#8A6F52", marginBottom: 8 }}>Buscá el producto manualmente:</div>
+                <div style={{ position: "relative", marginBottom: 10 }}>
+                  <Search size={16} style={{ position: "absolute", left: 12, top: 11, color: "#A68A68" }} />
+                  <input
+                    placeholder="Nombre del producto"
+                    value={busquedaManual}
+                    onChange={(e) => setBusquedaManual(e.target.value)}
+                    style={{ ...styles.input, paddingLeft: 36 }}
+                  />
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 220, overflowY: "auto" }}>
+                  {filtradosManual.map((p) => (
+                    <button
+                      key={p.id}
+                      onClick={() => { setMatch(p); setSinMatch(false); setQty(1); }}
+                      style={styles.selectRow}
+                      disabled={p.stock <= 0}
+                    >
+                      <span>{p.nombre}</span>
+                      <span style={{ display: "flex", gap: 14, alignItems: "center" }}>
+                        <span style={{ fontFamily: "'JetBrains Mono', monospace", color: "#8A6F52" }}>${money(p.precio)}</span>
+                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: p.stock <= 0 ? "#B23A34" : "#8A6F52" }}>
+                          {p.stock <= 0 ? "sin stock" : `${p.stock} en stock`}
+                        </span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                <button
+                  style={{ ...styles.ghostButton, width: "100%", justifyContent: "center", marginTop: 12 }}
+                  onClick={volverAEscanear}
+                >
+                  Volver a escanear
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Venta confirmada — vuelve sola a la cámara */}
+        {ventaConfirmada && (
+          <div style={{ textAlign: "center", padding: "12px 0" }}>
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
+              <div style={{
+                width: 48, height: 48, borderRadius: "50%", background: "#F6E7D3",
+                display: "flex", alignItems: "center", justifyContent: "center"
+              }}>
+                <Check size={24} color="#A8754E" />
+              </div>
+            </div>
+            <div style={{ fontSize: 14, color: "#8A6F52" }}>
+              {ventaConfirmada.cantidad} × {ventaConfirmada.nombre}
+            </div>
+            <div style={{ fontSize: 30, fontWeight: 800, fontFamily: "'JetBrains Mono', monospace", marginTop: 6 }}>
+              ${money(ventaConfirmada.total)}
+            </div>
+            <div style={{ fontSize: 12.5, color: "#8A6F52", marginTop: 10 }}>Volviendo a escanear…</div>
+          </div>
+        )}
+
+        {mensaje && (
+          <div style={{
+            marginTop: 16, padding: "10px 12px", borderRadius: 4, fontSize: 13,
+            background: mensaje.type === "error" ? "#FBEAE9" : "#F6E7D3",
+            color: mensaje.type === "error" ? "#B23A34" : "#A8754E"
+          }}>
+            {mensaje.text}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+},
       audio: false
     });
 
