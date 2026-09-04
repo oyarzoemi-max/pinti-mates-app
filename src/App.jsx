@@ -1258,8 +1258,9 @@ setFoto(dataUrl);
 if (conFoto.length === 0) {
   setSinMatch(true);
 }
-return;
-             
+
+      return;
+      
       setBuscando(true);
       try {
         const candidates = conFoto.slice(0, 30);
