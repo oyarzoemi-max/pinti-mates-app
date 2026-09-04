@@ -91,7 +91,7 @@ try {
 async function matchProductByPhoto(targetDataUrl, candidates) {
   // En móviles evitamos serializar muchas fotos Base64 de una sola vez.
   // Se comparan en lotes pequeños para reducir los picos de memoria.
-  const BATCH_SIZE = 5;
+  const BATCH_SIZE = 1;
   const limited = candidates.slice(0, 30);
 
   let bestMatch = null;
@@ -1256,11 +1256,10 @@ const cerrarCamara = () => {
       const dataUrl = await resizeImage(file, 320, 0.50 );
       setFoto(dataUrl);
       await new Promise((resolve) => setTimeout(resolve, 300));
-      return;
-      
+            
       if (conFoto.length === 0) {
         setSinMatch(true);
-        return;
+       
       }
       setBuscando(true);
       try {
