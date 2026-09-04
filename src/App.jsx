@@ -992,9 +992,7 @@ foto,
     placeholder="Detalles especiales del fabricante"
   />
 </Field>
-          <input type="number" step="1" min="0" style={styles.input} value={stock} onChange={(e) => setStock(e.target.value)} placeholder="0" />
-        </Field>
-
+         
         <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
           <button type="submit" style={{ ...styles.primaryButton, opacity: canSave ? 1 : 0.5 }} disabled={!canSave}>
             <Check size={16} /> Guardar producto
