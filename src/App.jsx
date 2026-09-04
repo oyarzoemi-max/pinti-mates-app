@@ -1174,12 +1174,18 @@ const streamRef = useRef(null);
     streamRef.current = stream;
     setCamaraActiva(true);
 
-    setTimeout(() => {
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.play();
+   requestAnimationFrame(() => {
+  requestAnimationFrame(async () => {
+    if (videoRef.current) {
+      videoRef.current.srcObject = stream;
+      try {
+        await videoRef.current.play();
+      } catch (error) {
+        console.error("No se pudo iniciar la vista de cámara:", error);
       }
-    }, 100);
+    }
+  });
+}); 
   } catch (error) {
     console.error(error);
     setMensaje("No se pudo abrir la cámara. Revisá el permiso de cámara.");
