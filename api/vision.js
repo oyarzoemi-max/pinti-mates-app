@@ -187,7 +187,9 @@ export default async function handler(req, res) {
     "3) CUERO O MATERIAL EXTERIOR: color, textura, costuras, estampado y terminación. " +
     "4) FORMA DEL MATE: cuerpo, boca, proporciones y silueta. " +
     "5) DETALLES ÚNICOS: grabados, marcas, irregularidades y cualquier elemento distintivo. " +
-
+    "6) FICHA TÉCNICA DEL PRODUCTO: usá también modelo, material, color, terminación, virola, guarda, base, patas, bolitas y detalles cuando estén disponibles. " +
+"Estos datos complementan la fotografía y sirven para distinguir productos visualmente parecidos. " +
+"Si la ficha técnica contradice claramente lo que observás en la foto, reducí la confianza y no fuerces una coincidencia. " +
     "REGLA CRÍTICA: dos mates pueden tener el mismo color, forma y material pero ser PRODUCTOS DIFERENTES si cambia la virola, el cincelado, la base, las patas o cualquier detalle ornamental importante. " +
 
     "No elijas el producto por semejanza general. Compará los detalles individualmente. " +
