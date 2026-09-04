@@ -1248,43 +1248,66 @@ const cerrarCamara = () => {
     setMensaje(null); setVentaConfirmada(null); setBusquedaManual("");
   };
 
-  const handleFoto = async (file) => {
-    if (!file) return;
-    reset();
-    try {
-     const dataUrl = await resizeImage(file, 320, 0.50);
-setFoto(dataUrl);
+ const handlePhoto = async (file) => {
+  if (!file) return;
 
-if (conFoto.length === 0) {
-  setSinMatch(true);
-}
+  reset();
 
-      return;
-      
-      setBuscando(true);
-      try {
-        const candidates = conFoto.slice(0, 30);
-        const productId = await matchProductByPhoto(dataUrl, candidates);
-        const found = productId ? products.find((p) => p.id === productId) : null;
-        if (found) {
-          setMatch(found);
-          setQty(1);
-        } else {
-          setSinMatch(true);
-        }
-      } catch (e) {
-        setMensaje({ type: "error", text: "No se pudo identificar el producto automáticamente. Buscalo manualmente abajo." });
-        setSinMatch(true);
-      } finally {
-        setBuscando(false);
-      }
-    } catch (e) {
-      setMensaje({ type: "error", text: e?.message || "No se pudo procesar la foto." });
-    } finally {
-      if (fileInputRef.current) fileInputRef.current.value = "";
+  try {
+    const dataUrl = await resizeImage(file, 320, 0.50);
+    setFoto(dataUrl);
+
+    if (conFoto.length === 0) {
+      setSinMatch(true);
     }
-  };
+  } catch (e) {
+    setMensaje({
+      type: "error",
+      text: e?.message || "No se pudo procesar la foto."
+    });
+  } finally {
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  }
+}; 
 
+const buscarProducto = async () => {
+  if (!foto) return;
+
+  if (conFoto.length === 0) {
+    setSinMatch(true);
+    return;
+  }
+
+  setBuscando(true);
+  setMensaje(null);
+  setSinMatch(false);
+  setMatch(null);
+
+  try {
+    const candidates = conFoto.slice(0, 30);
+    const productId = await matchProductByPhoto(foto, candidates);
+    const found = productId
+      ? products.find((p) => p.id === productId)
+      : null;
+
+    if (found) {
+      setMatch(found);
+      setQty(1);
+    } else {
+      setSinMatch(true);
+    }
+  } catch (e) {
+    setMensaje({
+      type: "error",
+      text: "No se pudo identificar el producto automáticamente."
+    });
+    setSinMatch(true);
+  } finally {
+    setBuscando(false);
+  }
+};
   const confirmar = () => {
     if (!match) return;
     if (qty <= 0) return;
@@ -1348,6 +1371,16 @@ if (conFoto.length === 0) {
 >
   <Camera size={16} /> Sacar foto del producto
 </button>
+            {foto && (
+  <button
+    type="button"
+    style={{ ...styles.primaryButton, marginTop: 12 }}
+    onClick={buscarProducto}
+    disabled={buscando}
+  >
+    {buscando ? "Buscando producto..." : "🔍 Buscar producto"}
+  </button>
+)}
             <div style={{ fontSize: 13, color: "#8A6F52", marginTop: 12 }}>
               Buscamos el producto comparando la foto con las que ya cargaste en el inventario.
             </div>
