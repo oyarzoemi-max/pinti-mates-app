@@ -99,11 +99,21 @@ for (let i = 0; i < limited.length; i += BATCH_SIZE) {
     body: JSON.stringify({
       action: "match",
       targetDataUrl,
-      candidates: batch.map((p) => ({
-        id: p.id,
-        nombre: p.nombre,
-        foto: p.foto
-      }))
+     candidates: batch.map((p) => ({
+  id: p.id,
+  nombre: p.nombre,
+  foto: p.foto,
+  modelo: p.modelo || "",
+  material: p.material || "",
+  color: p.color || "",
+  terminacion: p.terminacion || "",
+  virola: p.virola || "",
+  guarda: p.guarda || "",
+  base: p.base || "",
+  patas: p.patas || "",
+  bolitas: p.bolitas || "",
+  detalles: p.detalles || ""
+})) 
     })
   });
 
