@@ -95,13 +95,21 @@ async function matchProductByPhoto(targetDataUrl, candidates) {
 
   let bestMatch = null;
 let bestConfidence = 0;
-
+  
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) {
+    throw new Error("Tu sesión expiró. Volvé a iniciar sesión.");
+  }
+  
 for (let i = 0; i < limited.length; i += BATCH_SIZE) {
   const batch = limited.slice(i, i + BATCH_SIZE);
 
   const response = await fetch("/api/vision", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+   headers: {
+  "Content-Type": "application/json",
+  Authorization: `Bearer ${session.access_token}`
+}, 
     body: JSON.stringify({
       action: "match",
       targetDataUrl,
@@ -146,9 +154,17 @@ if (bestMatch && bestConfidence >= 90) {
 }
 
 async function suggestFromPhoto(dataUrl) {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) {
+    throw new Error("Tu sesión expiró. Volvé a iniciar sesión.");
+  }
+
   const response = await fetch("/api/vision", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${session.access_token}`
+    },
     body: JSON.stringify({ action: "suggest", dataUrl })
   });
   if (!response.ok) throw new Error("No se pudo analizar la foto");
