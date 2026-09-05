@@ -1,23 +1,49 @@
 // api/vision.js
 //
-// Cambios respecto al original:
-// 1) FICHA TÉCNICA: ahora se serializa modelo/material/color/terminación/
-//    virola/guarda/base/patas/bolitas/detalles de cada candidato en el texto
-//    que recibe Gemini. Antes el prompt decía "usá la ficha técnica" pero
-//    nunca se la mandábamos — el modelo comparaba a ciegas, solo por imagen.
-// 2) LOTES MÁS GRANDES: el límite de candidatos por llamada subió de 5 a 10
-//    (constante MAX_CANDIDATES_PER_CALL), para que tenga sentido mandar
-//    varios candidatos juntos y que el modelo pueda descartar por comparación
-//    relativa, tal como pide el prompt ("si hay dos candidatos similares...").
-//    Esto requiere subir también el BATCH_SIZE en el frontend (ver nota al
-//    final del archivo).
-// 3) DESCARGA EN PARALELO: las fotos de los candidatos se bajan con
-//    Promise.all en vez de una por una con await secuencial.
-// 4) REINTENTOS REALES: el loop de reintentos estaba fijado a 1 intento
-//    (for attempt=1; attempt<=1), así que el código de backoff nunca se
-//    ejecutaba. Ahora permite 2 intentos por modelo ante 429/500/503.
+// NUEVO en esta versión: verificación de autenticación.
+//
+// Antes, cualquiera que conociera la URL de este endpoint podía llamarlo
+// directamente desde afuera de la app, sin pasar por el login, gastando la
+// cuota de la API de Gemini sin control. Ahora el handler exige un token de
+// sesión válido de Supabase (Authorization: Bearer <token>) antes de hacer
+// cualquier llamada a Gemini. Si no viene un token válido, responde 401 y
+// no gasta ni un token de Gemini.
+//
+// Usa las variables de entorno que YA tenés cargadas en Vercel:
+// VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY (las mismas que usa el
+// frontend). No hace falta agregar variables nuevas — Vercel expone todas
+// las Environment Variables del proyecto a las funciones serverless,
+// independientemente del prefijo VITE_ (ese prefijo solo le importa a Vite
+// para decidir qué variables inyecta en el bundle del navegador).
+
+import { createClient } from "@supabase/supabase-js";
 
 const MAX_CANDIDATES_PER_CALL = 10;
+
+const supabaseAuth = createClient(
+  process.env.VITE_SUPABASE_URL,
+  process.env.VITE_SUPABASE_ANON_KEY
+);
+
+async function getAuthenticatedUser(req) {
+  const authHeader = req.headers.authorization || req.headers.Authorization || "";
+  const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+
+  if (!token) {
+    return null;
+  }
+
+  try {
+    const { data, error } = await supabaseAuth.auth.getUser(token);
+    if (error || !data?.user) {
+      return null;
+    }
+    return data.user;
+  } catch (error) {
+    console.error("Error validando sesión:", error);
+    return null;
+  }
+}
 
 function asGeminiImage(dataUrl) {
   const [meta, data] = dataUrl.split(",");
@@ -58,8 +84,6 @@ function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// Arma la línea de texto con la ficha técnica de un producto, solo con los
-// campos que efectivamente tienen valor.
 function fichaTecnica(product) {
   const campos = [
     product.modelo && `modelo: ${product.modelo}`,
@@ -173,6 +197,16 @@ export default async function handler(req, res) {
     return res.status(503).json({ error: "Falta configurar GEMINI_API_KEY" });
   }
 
+  if (!process.env.VITE_SUPABASE_URL || !process.env.VITE_SUPABASE_ANON_KEY) {
+    return res.status(503).json({ error: "Falta configurar VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY" });
+  }
+
+  // --- Verificación de sesión: corta acá si no hay un usuario logueado ---
+  const user = await getAuthenticatedUser(req);
+  if (!user) {
+    return res.status(401).json({ error: "No autorizado. Iniciá sesión para usar esta función." });
+  }
+
   try {
     const { action } = req.body || {};
     const parts = [];
@@ -213,7 +247,6 @@ export default async function handler(req, res) {
         .filter((p) => p.foto)
         .slice(0, MAX_CANDIDATES_PER_CALL);
 
-      // Descarga en paralelo en vez de una por una.
       const imagenesResueltas = await Promise.all(
         limitados.map(async (product) => {
           try {
@@ -289,21 +322,3 @@ export default async function handler(req, res) {
     });
   }
 }
-
-/*
- * NOTA — cambio correspondiente en el FRONTEND (matchProductByPhoto):
- *
- * Subí BATCH_SIZE de 1 a un número que coincida con MAX_CANDIDATES_PER_CALL
- * de este archivo (10), así el modelo compara varios candidatos en una sola
- * llamada en vez de hacer una llamada por producto:
- *
- *   const BATCH_SIZE = 10; // antes: 1
- *
- * Con 30 productos con foto, esto baja de 30 llamadas secuenciales a 3.
- * Si en algún momento el inventario crece mucho (80-100+ productos con
- * foto), lo ideal a mediano plazo es precalcular un "embedding" de cada
- * foto al cargarla (en vez de comparar imagen contra imagen con Gemini
- * cada vez) y usar eso para preseleccionar 5-10 candidatos antes de
- * confirmar con una sola llamada de verificación — pero para el volumen
- * de un negocio como el tuyo, con BATCH_SIZE=10 alcanza y sobra.
- */
