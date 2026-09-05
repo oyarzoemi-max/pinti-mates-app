@@ -628,15 +628,7 @@ Justo debajo, agregá estas líneas nuevas:
       <span style={{ fontSize: 10.5 }}>Más</span>
     </button>
   </nav>
-        <button
-          onClick={() => { setEditingId("new"); setView("nuevo"); }}
-          style={{ ...styles.bottomBarButton, color: view === "nuevo" ? "#A8754E" : "#8A6F52" }}
-        >
-          <Plus size={19} />
-          <span style={{ fontSize: 10.5 }}>Nuevo</span>
-        </button>
-      </nav>
-    </div>
+  </div>
   );
 }
 
