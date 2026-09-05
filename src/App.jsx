@@ -1214,6 +1214,45 @@ function NuevaVenta({ products, sales, onRegister }) {
  * money(), etc. — siguen definidos donde ya estaban en tu App.jsx.
  */
 
+/**
+ * REEMPLAZO del componente VentaPorFoto en tu App.jsx.
+ *
+ * Decisión de diseño (y por qué):
+ *
+ * Se abandona getUserMedia (cámara en vivo dentro del navegador) a favor de
+ * <input type="file" accept="image/*" capture="environment">, el mismo
+ * mecanismo que ya usás en "Nuevo producto" y que confirmaste que funciona
+ * bien en Android e iOS. Motivos:
+ *
+ *   1) getUserMedia tiene reglas de "user gesture" y permisos MUY distintas
+ *      entre Safari (iOS) y Chrome (Android) — es una fuente permanente de
+ *      fallas intermitentes difíciles de depurar en producción.
+ *   2) La app de cámara nativa vive FUERA del proceso del navegador. El tab
+ *      nunca tiene que decodificar un stream de video en vivo, que es la
+ *      causa más común del error de memoria insuficiente en celulares de
+ *      gama media/baja.
+ *   3) Es el camino ya validado en esta misma app.
+ *
+ * Para compensar la única desventaja real (no se puede reabrir la cámara
+ * 100% sola tras confirmar una venta, por restricciones de gesto de usuario
+ * en iOS), se muestra un botón grande "Escanear siguiente producto" que
+ * aparece de inmediato — un toque por producto en vez de cero, pero
+ * confiable en ambas plataformas.
+ *
+ * Consumo de memoria bajo control:
+ *   - La foto se comprime a 480px / calidad 0.6 usando resizeImage(), que ya
+ *     tenés definida en tu App.jsx (usa createImageBitmap cuando está
+ *     disponible, que reduce la imagen DURANTE la decodificación en vez de
+ *     decodificarla entera a resolución completa — esto es lo que evita el
+ *     pico de memoria con fotos de 12+ megapíxeles).
+ *   - No se guarda el File original en memoria más de lo necesario.
+ *   - El estado de la foto se limpia (`setFoto(null)`) apenas se confirma
+ *     la venta o se cancela, para que no quede referenciada de más.
+ *
+ * No toqué: resizeImage, matchProductByPhoto, suggestFromPhoto, styles,
+ * money(), etc. — siguen definidos donde ya estaban en tu App.jsx.
+ */
+
 function VentaPorFoto({ products, onRegister }) {
   const [foto, setFoto] = useState(null);
   const [buscando, setBuscando] = useState(false);
@@ -1224,99 +1263,35 @@ function VentaPorFoto({ products, onRegister }) {
   const [ventaConfirmada, setVentaConfirmada] = useState(null);
   const [registrando, setRegistrando] = useState(false);
   const [busquedaManual, setBusquedaManual] = useState("");
-
-  const [camaraLista, setCamaraLista] = useState(false);
-  const [errorCamara, setErrorCamara] = useState(null);
-  const videoRef = useRef(null);
-  const streamRef = useRef(null);
-  const abriendoRef = useRef(false); // evita doble apertura simultánea
+  const fileInputRef = useRef(null);
 
   const conFoto = products.filter((p) => p.foto);
 
-  // ---------- Ciclo de vida de la cámara ----------
-  const abrirCamara = async () => {
-    if (abriendoRef.current) return;
-    abriendoRef.current = true;
-    setErrorCamara(null);
+  // ---------- Captura + búsqueda automática ----------
+  const handleFoto = async (file) => {
+    if (!file) return;
 
-    if (!navigator.mediaDevices?.getUserMedia) {
-      setErrorCamara("Este navegador no soporta acceso a la cámara.");
-      abriendoRef.current = false;
-      return;
-    }
-
-    // Por las dudas, si quedó algo prendido de antes, lo cerramos primero.
-    cerrarCamara();
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: { ideal: "environment" },
-          width: { ideal: 960, max: 960 },
-          height: { ideal: 540, max: 540 }
-        },
-        audio: false
-      });
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-      }
-      setCamaraLista(true);
-    } catch (error) {
-      console.error(error);
-      setErrorCamara("No se pudo abrir la cámara. Revisá los permisos de cámara del navegador.");
-      setCamaraLista(false);
-    } finally {
-      abriendoRef.current = false;
-    }
-  };
-
-  const cerrarCamara = () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
-    }
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-    }
-    setCamaraLista(false);
-  };
-
-  // Abre la cámara al entrar a esta pantalla, la cierra al salir de ella.
-  useEffect(() => {
-    abrirCamara();
-    return () => cerrarCamara();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // ---------- Captura: congela frame, APAGA la cámara, y busca ----------
-  const capturarFoto = async () => {
-    const video = videoRef.current;
-    if (!video || !video.videoWidth || !video.videoHeight) return;
-
-    const maxWidth = 480;
-    const scale = Math.min(1, maxWidth / video.videoWidth);
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.round(video.videoWidth * scale);
-    canvas.height = Math.round(video.videoHeight * scale);
-    const ctx = canvas.getContext("2d");
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const dataUrl = canvas.toDataURL("image/jpeg", 0.7);
-
-    // Liberamos el canvas y apagamos la cámara ANTES de procesar/buscar,
-    // para no tener el stream de video y el análisis compitiendo por
-    // memoria al mismo tiempo.
-    canvas.width = 1;
-    canvas.height = 1;
-    cerrarCamara();
-
-    setFoto(dataUrl);
+    setFoto(null);
     setMatch(null);
     setSinMatch(false);
     setMensaje(null);
     setVentaConfirmada(null);
     setBusquedaManual("");
+
+    let dataUrl;
+    try {
+      // 480px / 0.6 de calidad: liviano a propósito, alcanza de sobra para
+      // que el modelo de visión identifique el producto, y minimiza tanto
+      // el pico de memoria al decodificar como el tamaño que se manda por red.
+      dataUrl = await resizeImage(file, 480, 0.6);
+    } catch (e) {
+      setMensaje({ type: "error", text: e?.message || "No se pudo procesar la foto." });
+      return;
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+
+    setFoto(dataUrl);
 
     if (conFoto.length === 0) {
       setSinMatch(true);
@@ -1350,7 +1325,6 @@ function VentaPorFoto({ products, onRegister }) {
     setMensaje(null);
     setVentaConfirmada(null);
     setBusquedaManual("");
-    abrirCamara(); // recién ahora se vuelve a prender la cámara
   };
 
   const confirmar = async () => {
@@ -1366,10 +1340,9 @@ function VentaPorFoto({ products, onRegister }) {
     if (ok === false) return;
 
     setVentaConfirmada({ nombre: match.nombre, cantidad: qty, total: match.precio * qty });
-
-    setTimeout(() => {
-      volverAEscanear();
-    }, 1400);
+    // Liberamos la foto de memoria apenas se confirma; el usuario decide
+    // cuándo escanear el siguiente con el botón de abajo.
+    setFoto(null);
   };
 
   const filtradosManual = products.filter((p) =>
@@ -1378,7 +1351,7 @@ function VentaPorFoto({ products, onRegister }) {
 
   return (
     <div style={{ maxWidth: 480 }}>
-      <PageHeader title="Venta por foto" subtitle="Apuntá al producto y tocá Escanear" />
+      <PageHeader title="Venta por foto" subtitle="Sacale una foto al producto para venderlo" />
 
       {conFoto.length === 0 && (
         <div style={{
@@ -1389,58 +1362,59 @@ function VentaPorFoto({ products, onRegister }) {
         </div>
       )}
 
-      <div style={styles.panel}>
-        {/* Vista de cámara en vivo — solo mientras no haya foto congelada */}
-        {!foto && (
-          <div>
-            <div style={{
-              position: "relative", width: "100%", aspectRatio: "4 / 3",
-              background: "#111", borderRadius: 8, overflow: "hidden"
-            }}>
-              <video
-                ref={videoRef}
-                playsInline
-                muted
-                style={{ width: "100%", height: "100%", objectFit: "cover", display: camaraLista ? "block" : "none" }}
-              />
-              {!camaraLista && !errorCamara && (
-                <div style={{
-                  position: "absolute", inset: 0, display: "flex", alignItems: "center",
-                  justifyContent: "center", color: "#FFF", fontSize: 13
-                }}>
-                  <Loader2 size={18} style={{ animation: "spin 1s linear infinite", marginRight: 8 }} />
-                  Abriendo cámara…
-                </div>
-              )}
-              {errorCamara && (
-                <div style={{
-                  position: "absolute", inset: 0, display: "flex", flexDirection: "column", gap: 10,
-                  alignItems: "center", justifyContent: "center", color: "#FFF", fontSize: 13,
-                  padding: 20, textAlign: "center"
-                }}>
-                  {errorCamara}
-                  <button style={styles.secondaryButton} onClick={abrirCamara}>Reintentar</button>
-                </div>
-              )}
-            </div>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        style={{ display: "none" }}
+        onChange={(e) => handleFoto(e.target.files?.[0])}
+      />
 
+      <div style={styles.panel}>
+        {/* Venta confirmada: pantalla de éxito + botón para seguir */}
+        {ventaConfirmada ? (
+          <div style={{ textAlign: "center", padding: "12px 0" }}>
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
+              <div style={{
+                width: 48, height: 48, borderRadius: "50%", background: "#F6E7D3",
+                display: "flex", alignItems: "center", justifyContent: "center"
+              }}>
+                <Check size={24} color="#A8754E" />
+              </div>
+            </div>
+            <div style={{ fontSize: 14, color: "#8A6F52" }}>
+              {ventaConfirmada.cantidad} × {ventaConfirmada.nombre}
+            </div>
+            <div style={{ fontSize: 30, fontWeight: 800, fontFamily: "'JetBrains Mono', monospace", marginTop: 6 }}>
+              ${money(ventaConfirmada.total)}
+            </div>
             <button
               type="button"
-              style={{ ...styles.primaryButton, width: "100%", justifyContent: "center", marginTop: 14 }}
-              onClick={capturarFoto}
-              disabled={!camaraLista}
+              style={{ ...styles.primaryButton, width: "100%", justifyContent: "center", marginTop: 18 }}
+              onClick={() => { volverAEscanear(); fileInputRef.current?.click(); }}
+            >
+              <Camera size={18} /> Escanear siguiente producto
+            </button>
+          </div>
+
+        // Sin foto todavía: pantalla inicial para escanear
+        ) : !foto ? (
+          <div style={{ textAlign: "center", padding: "20px 0" }}>
+            <button
+              type="button"
+              style={{ ...styles.primaryButton, width: "100%", justifyContent: "center" }}
+              onClick={() => fileInputRef.current?.click()}
             >
               <Camera size={18} /> Escanear producto
             </button>
-
-            <div style={{ fontSize: 13, color: "#8A6F52", marginTop: 10, textAlign: "center" }}>
+            <div style={{ fontSize: 13, color: "#8A6F52", marginTop: 12 }}>
               Buscamos el producto comparando la foto con las que ya cargaste en el inventario.
             </div>
           </div>
-        )}
 
-        {/* Resultado tras capturar */}
-        {foto && !ventaConfirmada && (
+        // Con foto: resultado de la búsqueda
+        ) : (
           <div>
             <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
               <img
@@ -1542,27 +1516,6 @@ function VentaPorFoto({ products, onRegister }) {
                 </button>
               </div>
             )}
-          </div>
-        )}
-
-        {/* Venta confirmada — vuelve sola a la cámara */}
-        {ventaConfirmada && (
-          <div style={{ textAlign: "center", padding: "12px 0" }}>
-            <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
-              <div style={{
-                width: 48, height: 48, borderRadius: "50%", background: "#F6E7D3",
-                display: "flex", alignItems: "center", justifyContent: "center"
-              }}>
-                <Check size={24} color="#A8754E" />
-              </div>
-            </div>
-            <div style={{ fontSize: 14, color: "#8A6F52" }}>
-              {ventaConfirmada.cantidad} × {ventaConfirmada.nombre}
-            </div>
-            <div style={{ fontSize: 30, fontWeight: 800, fontFamily: "'JetBrains Mono', monospace", marginTop: 6 }}>
-              ${money(ventaConfirmada.total)}
-            </div>
-            <div style={{ fontSize: 12.5, color: "#8A6F52", marginTop: 10 }}>Volviendo a escanear…</div>
           </div>
         )}
 
