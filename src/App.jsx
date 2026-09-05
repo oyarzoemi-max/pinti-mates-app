@@ -400,14 +400,43 @@ foto: photoUrl
     { id: "precios", label: "Lista de precios", icon: List },
     { id: "estadisticas", label: "Estadísticas", icon: BarChart3 }
   ];
-
+// Versión reducida para la barra inferior en celular: solo lo más
+  // usado, más un botón "Más" que abre el resto. Esto evita que 8
+  // íconos amontonados se corten o queden fuera de la pantalla en
+  // celulares angostos como el iPhone.
+  const navItemsMobile = [
+    { id: "resumen", label: "Resumen", icon: Home },
+    { id: "inventario", label: "Inventario", icon: Package },
+    { id: "venta", label: "Nueva venta", icon: ShoppingCart },
+    { id: "ventaFoto", label: "Foto", icon: Camera }
+  ];
   return (
     <div style={styles.appShell}>
       <style>{`
         ${FONT_IMPORT}
         * { box-sizing: border-box; }
         .naveg-item:hover { background: #F3E7D3; }
-        .naveg-item.active { background-image: linear-gradient(135deg, #C08C5D, #8B5A35); color: #FFFFFF; box-shadow: 0 2px 8px rgba(139,90,53,0.28); }
+        .naveg-item.active {
+       .naveg-item:hover { background: #F3E7D3; }
+  .naveg-item.active { background-image: linear-gradient(135deg, #C08C5D, #8B5A35); color: #FFFFFF; box-shadow: 0 2px 8px rgba(139,90,53,0.28); }
+ 
+Justo debajo, agregá estas líneas nuevas:
+ 
+  .nav-inferior-item { color: #8A6F52; }
+  .nav-inferior-icono {
+    display: flex; align-items: center; justify-content: center;
+    width: 34px; height: 34px; border-radius: 10px;
+    margin-bottom: 2px; transition: background .15s ease, color .15s ease;
+  }
+  .nav-inferior-item.activo {
+    color: #8B5A35;
+    font-weight: 700;
+  }
+  .nav-inferior-item.activo .nav-inferior-icono {
+    background-image: linear-gradient(135deg, #C08C5D, #8B5A35);
+    color: #FFFFFF;
+    box-shadow: 0 2px 8px rgba(139,90,53,0.32);
+  } background-image: linear-gradient(135deg, #C08C5D, #8B5A35); color: #FFFFFF; box-shadow: 0 2px 8px rgba(139,90,53,0.28); }
         .fila-tabla:hover { background: #FAF3E8; }
         input:focus, select:focus, textarea:focus, button:focus-visible {
           outline: 2px solid #A8754E; outline-offset: 1px;
@@ -572,19 +601,33 @@ foto: photoUrl
       </main>
 
       <nav className="barra-inferior no-imprimir" style={styles.bottomBar}>
-        {navItems.map((item) => (
-          <button
-            key={item.id}
-            onClick={() => { setView(item.id); setEditingId(null); }}
-            style={{
-              ...styles.bottomBarButton,
-              color: view === item.id ? "#A8754E" : "#8A6F52"
-            }}
-          >
-            <item.icon size={19} />
-            <span style={{ fontSize: 10.5 }}>{item.label}</span>
-          </button>
-        ))}
+    {navItemsMobile.map((item) => {
+      const activo = view === item.id;
+      return (
+        <button
+          key={item.id}
+          onClick={() => { setView(item.id); setEditingId(null); }}
+          className={`nav-inferior-item${activo ? " activo" : ""}`}
+          style={styles.bottomBarButton}
+        >
+          <span className="nav-inferior-icono">
+            <item.icon size={20} />
+          </span>
+          <span style={{ fontSize: 10.5 }}>{item.label}</span>
+        </button>
+      );
+    })}
+    <button
+      onClick={() => setView("mas")}
+      className={`nav-inferior-item${view === "mas" ? " activo" : ""}`}
+      style={styles.bottomBarButton}
+    >
+      <span className="nav-inferior-icono">
+        <List size={20} />
+      </span>
+      <span style={{ fontSize: 10.5 }}>Más</span>
+    </button>
+  </nav>
         <button
           onClick={() => { setEditingId("new"); setView("nuevo"); }}
           style={{ ...styles.bottomBarButton, color: view === "nuevo" ? "#A8754E" : "#8A6F52" }}
@@ -2125,8 +2168,8 @@ const styles = {
     overflowX: "auto", gap: 2, zIndex: 20
   },
   bottomBarButton: {
-    display: "flex", flexDirection: "column", alignItems: "center", gap: 3, border: "none",
-    background: "transparent", padding: "4px 5px", flexShrink: 0, minWidth: 54
+    display: "flex", flexDirection: "column", alignItems: "center", gap: 0, border: "none",
+    background: "transparent", padding: "4px 6px", flexShrink: 0, minWidth: 60
   },
   modalOverlay: {
     position: "fixed", inset: 0, background: "rgba(30,42,34,0.35)", display: "flex",
