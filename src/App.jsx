@@ -1185,8 +1185,37 @@ function NuevaVenta({ products, sales, onRegister }) {
  * archivo SOLO reemplaza la función VentaPorFoto completa.
  */
 
+/**
+ * REEMPLAZO del componente VentaPorFoto en tu App.jsx.
+ *
+ * Diferencia clave respecto a la versión anterior que dio error de memoria:
+ *
+ * 1) RESOLUCIÓN CON TOPE DURO: se pide { ideal: 960, max: 960 } en vez de
+ *    solo { ideal: 1280 }. Con "max" el navegador no puede darte más
+ *    resolución que esa aunque el hardware soporte más — antes el celular
+ *    podía llegar a entregar un stream de resolución mucho más alta que la
+ *    "ideal" pedida, y eso es lo que probablemente reventaba la memoria.
+ *
+ * 2) LA CÁMARA SE APAGA ENTRE CAPTURAS: apenas se toca "Escanear producto",
+ *    se congela el frame Y SE CIERRA el stream (getTracks().stop()). No
+ *    queda corriendo un video en vivo mientras se busca el producto, se
+ *    ajusta la cantidad o se confirma la venta — eso es lo que más memoria
+ *    consume sostenido en el tiempo. La cámara se vuelve a abrir sola
+ *    (rápido, ~200-400ms) recién cuando se vuelve a modo escaneo.
+ *
+ * 3) CAPTURA MÁS LIVIANA: el canvas de captura baja de 640px a 480px de
+ *    ancho máximo — de sobra para que Gemini identifique el producto, y
+ *    reduce el tamaño del dataURL que se manda por red.
+ *
+ * 4) Guarda contra doble apertura de cámara (si el usuario toca rápido dos
+ *    veces, no se abren dos streams superpuestos).
+ *
+ * No toqué: resizeImage, matchProductByPhoto, suggestFromPhoto, styles,
+ * money(), etc. — siguen definidos donde ya estaban en tu App.jsx.
+ */
+
 function VentaPorFoto({ products, onRegister }) {
-  const [foto, setFoto] = useState(null); // frame congelado mientras se busca/confirma
+  const [foto, setFoto] = useState(null);
   const [buscando, setBuscando] = useState(false);
   const [match, setMatch] = useState(null);
   const [sinMatch, setSinMatch] = useState(false);
@@ -1200,22 +1229,31 @@ function VentaPorFoto({ products, onRegister }) {
   const [errorCamara, setErrorCamara] = useState(null);
   const videoRef = useRef(null);
   const streamRef = useRef(null);
+  const abriendoRef = useRef(false); // evita doble apertura simultánea
 
   const conFoto = products.filter((p) => p.foto);
 
   // ---------- Ciclo de vida de la cámara ----------
   const abrirCamara = async () => {
+    if (abriendoRef.current) return;
+    abriendoRef.current = true;
     setErrorCamara(null);
+
     if (!navigator.mediaDevices?.getUserMedia) {
       setErrorCamara("Este navegador no soporta acceso a la cámara.");
+      abriendoRef.current = false;
       return;
     }
+
+    // Por las dudas, si quedó algo prendido de antes, lo cerramos primero.
+    cerrarCamara();
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: { ideal: "environment" },
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
+          width: { ideal: 960, max: 960 },
+          height: { ideal: 540, max: 540 }
         },
         audio: false
       });
@@ -1229,6 +1267,8 @@ function VentaPorFoto({ products, onRegister }) {
       console.error(error);
       setErrorCamara("No se pudo abrir la cámara. Revisá los permisos de cámara del navegador.");
       setCamaraLista(false);
+    } finally {
+      abriendoRef.current = false;
     }
   };
 
@@ -1236,6 +1276,9 @@ function VentaPorFoto({ products, onRegister }) {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
     }
     setCamaraLista(false);
   };
@@ -1247,19 +1290,26 @@ function VentaPorFoto({ products, onRegister }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ---------- Captura + búsqueda automática ----------
+  // ---------- Captura: congela frame, APAGA la cámara, y busca ----------
   const capturarFoto = async () => {
     const video = videoRef.current;
     if (!video || !video.videoWidth || !video.videoHeight) return;
 
-    const maxWidth = 640;
+    const maxWidth = 480;
     const scale = Math.min(1, maxWidth / video.videoWidth);
     const canvas = document.createElement("canvas");
     canvas.width = Math.round(video.videoWidth * scale);
     canvas.height = Math.round(video.videoHeight * scale);
     const ctx = canvas.getContext("2d");
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const dataUrl = canvas.toDataURL("image/jpeg", 0.75);
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.7);
+
+    // Liberamos el canvas y apagamos la cámara ANTES de procesar/buscar,
+    // para no tener el stream de video y el análisis compitiendo por
+    // memoria al mismo tiempo.
+    canvas.width = 1;
+    canvas.height = 1;
+    cerrarCamara();
 
     setFoto(dataUrl);
     setMatch(null);
@@ -1300,6 +1350,7 @@ function VentaPorFoto({ products, onRegister }) {
     setMensaje(null);
     setVentaConfirmada(null);
     setBusquedaManual("");
+    abrirCamara(); // recién ahora se vuelve a prender la cámara
   };
 
   const confirmar = async () => {
@@ -1312,11 +1363,10 @@ function VentaPorFoto({ products, onRegister }) {
     setRegistrando(true);
     const ok = await onRegister(match.id, qty);
     setRegistrando(false);
-    if (ok === false) return; // el error ya se muestra desde registerSale (alert)
+    if (ok === false) return;
 
     setVentaConfirmada({ nombre: match.nombre, cantidad: qty, total: match.precio * qty });
 
-    // Vuelve sola al modo escaneo para encadenar la próxima venta.
     setTimeout(() => {
       volverAEscanear();
     }, 1400);
@@ -1340,7 +1390,7 @@ function VentaPorFoto({ products, onRegister }) {
       )}
 
       <div style={styles.panel}>
-        {/* Vista de cámara en vivo */}
+        {/* Vista de cámara en vivo — solo mientras no haya foto congelada */}
         {!foto && (
           <div>
             <div style={{
