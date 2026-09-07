@@ -1867,23 +1867,7 @@ function ListaPrecios({ products }) {
       {products.length === 0 ? (
         <EmptyState title="No hay productos para mostrar" detail="Cargá productos en el inventario para generar la lista." />
       ) : (
-        CAMBIOS A APLICAR EN App.jsx
-=============================
-
-Requisito: ya tenés que tener aplicada la función `resumenFicha` de la
-modificación anterior (la que agregamos antes de `function VentaPorFoto`).
-Si no la tenés, avisame y te la vuelvo a pasar. Estos cambios la reutilizan
-tal cual está, no hace falta duplicarla.
-
-
-----------------------------------------------------------------------
-CAMBIO 1 — Lista de precios
-----------------------------------------------------------------------
-
-Buscá con Ctrl+F: `function ListaPrecios`
-
-Vas a ver esta tabla adentro:
-
+        
   <table style={styles.table}>
     <tbody>
       {ordenados.map((p) => (
@@ -1918,15 +1902,7 @@ Reemplazala por:
       ))}
     </tbody>
   </table>
-
-
-----------------------------------------------------------------------
-CAMBIO 2 — Estadísticas: tabla "Productos cargados en el período"
-----------------------------------------------------------------------
-
-Dentro de `function Estadisticas`, buscá esta tabla (tiene las columnas
-Producto / Precio / Stock actual / Fecha de carga):
-
+      
   <tbody>
     {productosCargados.map((p) => (
       <tr key={p.id} className="fila-tabla">
@@ -1952,13 +1928,6 @@ por:
       </div>
     )}
   </td>
-
-
-----------------------------------------------------------------------
-CAMBIO 3 — Estadísticas: tabla "Ventas generadas en el período"
-----------------------------------------------------------------------
-
-Buscá esta tabla (columnas Producto / Cant. / Total / Fecha):
 
   <tbody>
     {ventasEnRango.map((s) => (
@@ -1994,18 +1963,6 @@ inventario actual para poder mostrar su ficha técnica):
       );
     })}
   </tbody>
-
-Nota: si el producto fue eliminado del inventario después de la venta,
-`productoVendido` va a ser undefined y simplemente no se muestra la ficha
-extra — no rompe nada, solo se ve el nombre como antes.
-
-
-----------------------------------------------------------------------
-CAMBIO 4 — Estadísticas: tabla "Cambios y bajas en el período"
-----------------------------------------------------------------------
-
-Buscá esta tabla (columnas Tipo / Detalle / Comentario / Fecha), la que
-está más abajo en el mismo componente Estadisticas:
 
   <tbody>
     {ventasEnRango.map((s) => (
@@ -2088,18 +2045,6 @@ Reemplazala COMPLETA por:
     })}
   </tbody>
 
-
-----------------------------------------------------------------------
-RESUMEN
-----------------------------------------------------------------------
-
-Con estos 4 cambios: Lista de precios y las 3 tablas de Estadísticas
-(altas de inventario, ventas, y cambios/bajas) muestran ahora la ficha
-técnica resumida (modelo, color, material, virola, base, guarda) debajo
-del nombre del producto, igual que ya quedó en "Buscar y vender".
-
-Si más adelante también querés esto en la tabla de Inventario, avisame y
-lo agregamos igual — quedó pendiente de una consulta anterior.
       )}
     </div>
   );
