@@ -180,6 +180,16 @@ function mapProduct(row) {
     costo: Number(row.costo) || 0,
     stock: Number(row.stock) || 0,
     proveedor: row.proveedor || "",
+    modelo: row.modelo || "",
+    material: row.material || "",
+    color: row.color || "",
+    terminacion: row.terminacion || "",
+    virola: row.virola || "",
+    guarda: row.guarda || "",
+    base: row.base || "",
+    patas: row.patas || "",
+    bolitas: row.bolitas || "",
+    detalles: row.detalles || "",
     foto: row.foto || null,
     creadoEn: row.created_at || null
   };
