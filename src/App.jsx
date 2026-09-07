@@ -424,7 +424,7 @@ foto: photoUrl
     { id: "resumen", label: "Resumen", icon: Home },
     { id: "inventario", label: "Inventario", icon: Package },
     { id: "venta", label: "Nueva venta", icon: ShoppingCart },
-    { id: "ventaFoto", label: "Foto", icon: Camera }
+        { id: "ventaFoto", label: "Buscar", icon: Search }
   ];
   return (
     <div style={styles.appShell}>
@@ -1304,127 +1304,117 @@ function NuevaVenta({ products, sales, onRegister }) {
  * money(), etc. — siguen definidos donde ya estaban en tu App.jsx.
  */
 
+/**
+ * REEMPLAZO del componente VentaPorFoto en tu App.jsx.
+ *
+ * Cambio de enfoque respecto a las versiones anteriores:
+ *
+ * Se abandona la identificación automática por foto (Gemini) para el flujo
+ * de venta. En su lugar: un buscador de texto con coincidencia por varias
+ * palabras + una lista de productos con foto más grande para reconocerlos
+ * a simple vista y tocar el correcto.
+ *
+ * Ventajas:
+ *   - Es instantáneo: no hay red, no hay IA, es un filtro sobre los
+ *     productos que la app ya tiene cargados en memoria.
+ *   - Cero margen de error de reconocimiento (lo elegís vos mirando).
+ *   - No consume la cuota de la API de Gemini en cada venta.
+ *
+ * La búsqueda multi-palabra funciona así: separa lo que escribís en
+ * palabras, e ignora mayúsculas/tildes. Un producto aparece si TODAS esas
+ * palabras están presentes en alguno de sus campos (nombre, modelo,
+ * material, color, terminación, virola, guarda, base, patas, bolitas,
+ * detalles, proveedor). Ejemplo: escribir "negro virola alpaca" encuentra
+ * cualquier producto que tenga esas tres palabras, sin importar el orden
+ * ni en qué campo estén.
+ *
+ * No toqué: styles, money(), PageHeader, EmptyState, etc. — siguen
+ * definidos donde ya estaban en tu App.jsx. Tampoco toqué suggestFromPhoto
+ * ni matchProductByPhoto — esas funciones siguen existiendo por si las
+ * usás en otro lado (ej. sugerencia de nombre en "Nuevo producto"), pero
+ * ESTE componente ya no las llama.
+ */
+
+function normalizarTexto(texto) {
+  return (texto || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, ""); // saca tildes/acentos
+}
+
+function textoBuscableDeProducto(p) {
+  return normalizarTexto(
+    [
+      p.nombre, p.modelo, p.material, p.color, p.terminacion,
+      p.virola, p.guarda, p.base, p.patas, p.bolitas, p.detalles, p.proveedor
+    ].filter(Boolean).join(" ")
+  );
+}
+
+function coincideBusqueda(p, query) {
+  const palabras = normalizarTexto(query).split(/\s+/).filter(Boolean);
+  if (palabras.length === 0) return true;
+  const texto = textoBuscableDeProducto(p);
+  return palabras.every((palabra) => texto.includes(palabra));
+}
+
 function VentaPorFoto({ products, onRegister }) {
-  const [foto, setFoto] = useState(null);
-  const [buscando, setBuscando] = useState(false);
-  const [match, setMatch] = useState(null);
-  const [sinMatch, setSinMatch] = useState(false);
+  const [query, setQuery] = useState("");
+  const [selectedId, setSelectedId] = useState(null);
   const [qty, setQty] = useState(1);
   const [mensaje, setMensaje] = useState(null);
-  const [ventaConfirmada, setVentaConfirmada] = useState(null);
   const [registrando, setRegistrando] = useState(false);
-  const [busquedaManual, setBusquedaManual] = useState("");
-  const fileInputRef = useRef(null);
+  const [ventaConfirmada, setVentaConfirmada] = useState(null);
 
   const conFoto = products.filter((p) => p.foto);
+  const selected = products.find((p) => p.id === selectedId);
 
-  // ---------- Captura + búsqueda automática ----------
-  const handleFoto = async (file) => {
-    if (!file) return;
+  const filtrados = useMemo(
+    () => conFoto.filter((p) => coincideBusqueda(p, query)),
+    [conFoto, query]
+  );
 
-    setFoto(null);
-    setMatch(null);
-    setSinMatch(false);
-    setMensaje(null);
-    setVentaConfirmada(null);
-    setBusquedaManual("");
-
-    let dataUrl;
-    try {
-      // 480px / 0.6 de calidad: liviano a propósito, alcanza de sobra para
-      // que el modelo de visión identifique el producto, y minimiza tanto
-      // el pico de memoria al decodificar como el tamaño que se manda por red.
-      dataUrl = await resizeImage(file, 480, 0.6);
-    } catch (e) {
-      setMensaje({ type: "error", text: e?.message || "No se pudo procesar la foto." });
-      return;
-    } finally {
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    }
-
-    setFoto(dataUrl);
-
-    if (conFoto.length === 0) {
-      setSinMatch(true);
-      return;
-    }
-
-    setBuscando(true);
-    try {
-      const candidates = conFoto.slice(0, 30);
-      const productId = await matchProductByPhoto(dataUrl, candidates);
-      const found = productId ? products.find((p) => p.id === productId) : null;
-      if (found) {
-        setMatch(found);
-        setQty(1);
-      } else {
-        setSinMatch(true);
-      }
-    } catch (e) {
-      setMensaje({ type: "error", text: "No se pudo identificar el producto automáticamente." });
-      setSinMatch(true);
-    } finally {
-      setBuscando(false);
-    }
-  };
-
-  const volverAEscanear = () => {
-    setFoto(null);
-    setMatch(null);
-    setSinMatch(false);
+  const seleccionar = (p) => {
+    setSelectedId(p.id);
     setQty(1);
     setMensaje(null);
-    setVentaConfirmada(null);
-    setBusquedaManual("");
+  };
+
+  const cancelarSeleccion = () => {
+    setSelectedId(null);
+    setQty(1);
+    setMensaje(null);
   };
 
   const confirmar = async () => {
-    if (!match || registrando) return;
+    if (!selected || registrando) return;
     if (qty <= 0) return;
-    if (qty > match.stock) {
-      setMensaje({ type: "error", text: `Solo hay ${match.stock} unidades disponibles.` });
+    if (qty > selected.stock) {
+      setMensaje({ type: "error", text: `Solo hay ${selected.stock} unidades disponibles.` });
       return;
     }
     setRegistrando(true);
-    const ok = await onRegister(match.id, qty);
+    const ok = await onRegister(selected.id, qty);
     setRegistrando(false);
     if (ok === false) return;
 
-    setVentaConfirmada({ nombre: match.nombre, cantidad: qty, total: match.precio * qty });
-    // Liberamos la foto de memoria apenas se confirma; el usuario decide
-    // cuándo escanear el siguiente con el botón de abajo.
-    setFoto(null);
+    setVentaConfirmada({ nombre: selected.nombre, cantidad: qty, total: selected.precio * qty });
+    setSelectedId(null);
+    setQuery("");
+    setQty(1);
   };
-
-  const filtradosManual = products.filter((p) =>
-    p.nombre.toLowerCase().includes(busquedaManual.toLowerCase())
-  );
 
   return (
     <div style={{ maxWidth: 480 }}>
-      <PageHeader title="Venta por foto" subtitle="Sacale una foto al producto para venderlo" />
+      <PageHeader title="Buscar y vender" subtitle="Buscá por nombre, color, modelo... y tocá la foto correcta" />
 
-      {conFoto.length === 0 && (
-        <div style={{
-          marginBottom: 16, padding: "10px 12px", borderRadius: 4, fontSize: 13,
-          background: "#FDF3E7", color: "#CE9B3F"
-        }}>
-          Todavía no hay productos con foto cargada en el inventario. Este método funciona mejor cuando los productos tienen foto.
-        </div>
-      )}
-
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        style={{ display: "none" }}
-        onChange={(e) => handleFoto(e.target.files?.[0])}
-      />
-
-      <div style={styles.panel}>
-        {/* Venta confirmada: pantalla de éxito + botón para seguir */}
-        {ventaConfirmada ? (
+      {conFoto.length === 0 ? (
+        <EmptyState
+          title="No hay productos con foto"
+          detail="Cargá fotos en el inventario (sección Inventario → Modificar producto) para poder buscarlos acá."
+        />
+      ) : ventaConfirmada ? (
+        <div style={styles.panel}>
           <div style={{ textAlign: "center", padding: "12px 0" }}>
             <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
               <div style={{
@@ -1440,146 +1430,132 @@ function VentaPorFoto({ products, onRegister }) {
             <div style={{ fontSize: 30, fontWeight: 800, fontFamily: "'JetBrains Mono', monospace", marginTop: 6 }}>
               ${money(ventaConfirmada.total)}
             </div>
-            <button
-              type="button"
-              style={{ ...styles.primaryButton, width: "100%", justifyContent: "center", marginTop: 18 }}
-              onClick={() => { volverAEscanear(); fileInputRef.current?.click(); }}
-            >
-              <Camera size={18} /> Escanear siguiente producto
+            <button style={{ ...styles.primaryButton, marginTop: 18 }} onClick={() => setVentaConfirmada(null)}>
+              <Search size={16} /> Buscar otro producto
             </button>
           </div>
-
-        // Sin foto todavía: pantalla inicial para escanear
-        ) : !foto ? (
-          <div style={{ textAlign: "center", padding: "20px 0" }}>
-            <button
-              type="button"
-              style={{ ...styles.primaryButton, width: "100%", justifyContent: "center" }}
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <Camera size={18} /> Escanear producto
-            </button>
-            <div style={{ fontSize: 13, color: "#8A6F52", marginTop: 12 }}>
-              Buscamos el producto comparando la foto con las que ya cargaste en el inventario.
-            </div>
-          </div>
-
-        // Con foto: resultado de la búsqueda
-        ) : (
-          <div>
-            <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
+        </div>
+      ) : selected ? (
+        <div style={styles.panel}>
+          <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
+            {selected.foto ? (
               <img
-                src={match?.foto || foto}
-                alt="Producto"
-                style={{ width: 72, height: 72, borderRadius: 4, objectFit: "cover", flexShrink: 0 }}
+                src={selected.foto}
+                alt={selected.nombre}
+                style={{ width: 84, height: 84, borderRadius: 8, objectFit: "cover", flexShrink: 0 }}
               />
-              <div style={{ flex: 1 }}>
-                {buscando ? (
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#8A6F52", fontSize: 14 }}>
-                    <Loader2 size={16} style={{ animation: "spin 1s linear infinite" }} />
-                    Buscando en el inventario…
-                  </div>
-                ) : match ? (
-                  <div>
-                    <div style={{ fontWeight: 700, fontSize: 16 }}>{match.nombre}</div>
-                    <div style={{ color: "#8A6F52", fontSize: 13, marginTop: 2 }}>
-                      ${money(match.precio)} · {match.stock} disponibles
-                    </div>
-                  </div>
-                ) : (
-                  <div style={{ fontSize: 14, color: "#B23A34" }}>
-                    No se encontró un producto que coincida con esta foto.
-                  </div>
-                )}
+            ) : (
+              <div style={{
+                width: 84, height: 84, borderRadius: 8, background: "#F3E7D3",
+                display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0
+              }}>
+                <ImageOff size={20} color="#A68A68" />
               </div>
-              <button style={styles.iconButton} onClick={volverAEscanear} aria-label="Cancelar">
-                <X size={16} />
+            )}
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 700, fontSize: 17 }}>{selected.nombre}</div>
+              <div style={{ color: "#8A6F52", fontSize: 13, marginTop: 2 }}>
+                ${money(selected.precio)} · {selected.stock} disponibles
+              </div>
+            </div>
+            <button style={styles.iconButton} onClick={cancelarSeleccion} aria-label="Cambiar producto">
+              <X size={16} />
+            </button>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 20 }}>
+            <span style={{ fontSize: 13, color: "#8A6F52" }}>Cantidad</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <button style={styles.stepperButton} onClick={() => setQty((q) => Math.max(1, q - 1))}>
+                <Minus size={14} />
+              </button>
+              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 18, minWidth: 28, textAlign: "center" }}>
+                {qty}
+              </span>
+              <button style={styles.stepperButton} onClick={() => setQty((q) => Math.min(selected.stock, q + 1))}>
+                <Plus size={14} />
               </button>
             </div>
+          </div>
 
-            {!buscando && match && (
-              <>
-                <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 20 }}>
-                  <span style={{ fontSize: 13, color: "#8A6F52" }}>Cantidad</span>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <button style={styles.stepperButton} onClick={() => setQty((q) => Math.max(1, q - 1))}>
-                      <Minus size={14} />
-                    </button>
-                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 18, minWidth: 28, textAlign: "center" }}>
-                      {qty}
-                    </span>
-                    <button style={styles.stepperButton} onClick={() => setQty((q) => Math.min(match.stock, q + 1))}>
-                      <Plus size={14} />
-                    </button>
-                  </div>
-                </div>
-                <div style={{ marginTop: 16, fontSize: 15 }}>
-                  Total: <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700 }}>
-                    ${money(match.precio * qty)}
-                  </span>
-                </div>
-                <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
-                  <button style={styles.primaryButton} onClick={confirmar} disabled={registrando}>
-                    <Check size={16} /> {registrando ? "Registrando…" : "Confirmar venta"}
-                  </button>
-                  <button style={styles.ghostButton} onClick={() => { setMatch(null); setSinMatch(true); }}>
-                    No es este producto
-                  </button>
-                </div>
-              </>
-            )}
+          <div style={{ marginTop: 16, fontSize: 15 }}>
+            Total: <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700 }}>
+              ${money(selected.precio * qty)}
+            </span>
+          </div>
 
-            {!buscando && sinMatch && (
-              <div style={{ marginTop: 20 }}>
-                <div style={{ fontSize: 13, color: "#8A6F52", marginBottom: 8 }}>Buscá el producto manualmente:</div>
-                <div style={{ position: "relative", marginBottom: 10 }}>
-                  <Search size={16} style={{ position: "absolute", left: 12, top: 11, color: "#A68A68" }} />
-                  <input
-                    placeholder="Nombre del producto"
-                    value={busquedaManual}
-                    onChange={(e) => setBusquedaManual(e.target.value)}
-                    style={{ ...styles.input, paddingLeft: 36 }}
-                  />
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 220, overflowY: "auto" }}>
-                  {filtradosManual.map((p) => (
-                    <button
-                      key={p.id}
-                      onClick={() => { setMatch(p); setSinMatch(false); setQty(1); }}
-                      style={styles.selectRow}
-                      disabled={p.stock <= 0}
-                    >
-                      <span>{p.nombre}</span>
-                      <span style={{ display: "flex", gap: 14, alignItems: "center" }}>
-                        <span style={{ fontFamily: "'JetBrains Mono', monospace", color: "#8A6F52" }}>${money(p.precio)}</span>
-                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: p.stock <= 0 ? "#B23A34" : "#8A6F52" }}>
-                          {p.stock <= 0 ? "sin stock" : `${p.stock} en stock`}
-                        </span>
-                      </span>
-                    </button>
-                  ))}
-                </div>
+          <button style={{ ...styles.primaryButton, marginTop: 18 }} onClick={confirmar} disabled={registrando}>
+            <Check size={16} /> {registrando ? "Registrando…" : "Confirmar venta"}
+          </button>
+
+          {mensaje && (
+            <div style={{
+              marginTop: 16, padding: "10px 12px", borderRadius: 4, fontSize: 13,
+              background: mensaje.type === "error" ? "#FBEAE9" : "#F6E7D3",
+              color: mensaje.type === "error" ? "#B23A34" : "#A8754E"
+            }}>
+              {mensaje.text}
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
+          <div style={{ position: "relative", marginBottom: 14 }}>
+            <Search size={16} style={{ position: "absolute", left: 12, top: 11, color: "#A68A68" }} />
+            <input
+              autoFocus
+              placeholder="Buscar por nombre, color, modelo, virola…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              style={{ ...styles.input, paddingLeft: 36 }}
+            />
+          </div>
+
+          {filtrados.length === 0 ? (
+            <EmptyState title="Sin resultados" detail="Probá con menos palabras, o revisá cómo lo cargaste en el inventario." />
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 560, overflowY: "auto" }}>
+              {filtrados.map((p) => (
                 <button
-                  style={{ ...styles.ghostButton, width: "100%", justifyContent: "center", marginTop: 12 }}
-                  onClick={volverAEscanear}
+                  key={p.id}
+                  onClick={() => seleccionar(p)}
+                  disabled={p.stock <= 0}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 12, padding: 10,
+                    border: "1px solid #E6D6BE", borderRadius: 10, background: "#FFFFFF",
+                    textAlign: "left", opacity: p.stock <= 0 ? 0.55 : 1
+                  }}
                 >
-                  Volver a escanear
+                  <img
+                    src={p.foto}
+                    alt={p.nombre}
+                    style={{ width: 64, height: 64, borderRadius: 8, objectFit: "cover", flexShrink: 0 }}
+                  />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{
+                      fontWeight: 700, fontSize: 14.5, whiteSpace: "nowrap",
+                      overflow: "hidden", textOverflow: "ellipsis"
+                    }}>
+                      {p.nombre}
+                    </div>
+                    <div style={{ display: "flex", gap: 10, marginTop: 4, fontSize: 12.5 }}>
+                      <span style={{ fontFamily: "'JetBrains Mono', monospace", color: "#8A6F52" }}>
+                        ${money(p.precio)}
+                      </span>
+                      <span style={{
+                        fontFamily: "'JetBrains Mono', monospace",
+                        color: p.stock <= 0 ? "#B23A34" : "#8A6F52"
+                      }}>
+                        {p.stock <= 0 ? "sin stock" : `${p.stock} en stock`}
+                      </span>
+                    </div>
+                  </div>
                 </button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {mensaje && (
-          <div style={{
-            marginTop: 16, padding: "10px 12px", borderRadius: 4, fontSize: 13,
-            background: mensaje.type === "error" ? "#FBEAE9" : "#F6E7D3",
-            color: mensaje.type === "error" ? "#B23A34" : "#A8754E"
-          }}>
-            {mensaje.text}
-          </div>
-        )}
-      </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
