@@ -1368,6 +1368,17 @@ function coincideBusqueda(p, query) {
   return palabras.every((palabra) => texto.includes(palabra));
 }
 
+function resumenFicha(p) {
+  return [
+    p.modelo && `Modelo: ${p.modelo}`,
+    p.color && `Color: ${p.color}`,
+    p.material && `Material: ${p.material}`,
+    p.virola && `Virola: ${p.virola}`,
+    p.base && `Base: ${p.base}`,
+    p.guarda && `Guarda: ${p.guarda}`
+  ].filter(Boolean).join(" · ");
+}
+
 function VentaPorFoto({ products, onRegister }) {
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState(null);
@@ -1462,8 +1473,13 @@ function VentaPorFoto({ products, onRegister }) {
                 <ImageOff size={20} color="#A68A68" />
               </div>
             )}
-            <div style={{ flex: 1 }}>
+                        <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 700, fontSize: 17 }}>{selected.nombre}</div>
+              {resumenFicha(selected) && (
+                <div style={{ fontSize: 12.5, color: "#A68A68", marginTop: 2 }}>
+                  {resumenFicha(selected)}
+                </div>
+              )}
               <div style={{ color: "#8A6F52", fontSize: 13, marginTop: 2 }}>
                 ${money(selected.precio)} · {selected.stock} disponibles
               </div>
@@ -1541,13 +1557,21 @@ function VentaPorFoto({ products, onRegister }) {
                     alt={p.nombre}
                     style={{ width: 64, height: 64, borderRadius: 8, objectFit: "cover", flexShrink: 0 }}
                   />
-                  <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{
                       fontWeight: 700, fontSize: 14.5, whiteSpace: "nowrap",
                       overflow: "hidden", textOverflow: "ellipsis"
                     }}>
                       {p.nombre}
                     </div>
+                    {resumenFicha(p) && (
+                      <div style={{
+                        fontSize: 11.5, color: "#A68A68", marginTop: 2,
+                        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"
+                      }}>
+                        {resumenFicha(p)}
+                      </div>
+                    )}
                     <div style={{ display: "flex", gap: 10, marginTop: 4, fontSize: 12.5 }}>
                       <span style={{ fontFamily: "'JetBrains Mono', monospace", color: "#8A6F52" }}>
                         ${money(p.precio)}
@@ -1559,7 +1583,7 @@ function VentaPorFoto({ products, onRegister }) {
                         {p.stock <= 0 ? "sin stock" : `${p.stock} en stock`}
                       </span>
                     </div>
-                  </div>
+                  </div> 
                 </button>
               ))}
             </div>
