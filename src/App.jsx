@@ -1867,18 +1867,239 @@ function ListaPrecios({ products }) {
       {products.length === 0 ? (
         <EmptyState title="No hay productos para mostrar" detail="Cargá productos en el inventario para generar la lista." />
       ) : (
-        <table style={styles.table}>
-          <tbody>
-            {ordenados.map((p) => (
-              <tr key={p.id}>
-                <td style={{ ...styles.td, paddingLeft: 0 }}>{p.nombre}</td>
-                <td style={{ ...styles.td, textAlign: "right", paddingRight: 0, fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>
-                  ${money(p.precio)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        CAMBIOS A APLICAR EN App.jsx
+=============================
+
+Requisito: ya tenés que tener aplicada la función `resumenFicha` de la
+modificación anterior (la que agregamos antes de `function VentaPorFoto`).
+Si no la tenés, avisame y te la vuelvo a pasar. Estos cambios la reutilizan
+tal cual está, no hace falta duplicarla.
+
+
+----------------------------------------------------------------------
+CAMBIO 1 — Lista de precios
+----------------------------------------------------------------------
+
+Buscá con Ctrl+F: `function ListaPrecios`
+
+Vas a ver esta tabla adentro:
+
+  <table style={styles.table}>
+    <tbody>
+      {ordenados.map((p) => (
+        <tr key={p.id}>
+          <td style={{ ...styles.td, paddingLeft: 0 }}>{p.nombre}</td>
+          <td style={{ ...styles.td, textAlign: "right", paddingRight: 0, fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>
+            ${money(p.precio)}
+          </td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+
+Reemplazala por:
+
+  <table style={styles.table}>
+    <tbody>
+      {ordenados.map((p) => (
+        <tr key={p.id}>
+          <td style={{ ...styles.td, paddingLeft: 0, verticalAlign: "top" }}>
+            <div style={{ fontWeight: 600 }}>{p.nombre}</div>
+            {resumenFicha(p) && (
+              <div style={{ fontSize: 11.5, color: "#8A6F52", marginTop: 2 }}>
+                {resumenFicha(p)}
+              </div>
+            )}
+          </td>
+          <td style={{ ...styles.td, textAlign: "right", paddingRight: 0, fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, verticalAlign: "top" }}>
+            ${money(p.precio)}
+          </td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+
+
+----------------------------------------------------------------------
+CAMBIO 2 — Estadísticas: tabla "Productos cargados en el período"
+----------------------------------------------------------------------
+
+Dentro de `function Estadisticas`, buscá esta tabla (tiene las columnas
+Producto / Precio / Stock actual / Fecha de carga):
+
+  <tbody>
+    {productosCargados.map((p) => (
+      <tr key={p.id} className="fila-tabla">
+        <td style={styles.td}>{p.nombre}</td>
+        <td style={{ ...styles.td, textAlign: "right", fontFamily: "'JetBrains Mono', monospace" }}>${money(p.precio)}</td>
+        <td style={{ ...styles.td, textAlign: "right", fontFamily: "'JetBrains Mono', monospace" }}>{p.stock}</td>
+        <td style={{ ...styles.td, color: "#8A6F52", fontSize: 12.5 }}>{new Date(p.creadoEn).toLocaleDateString("es-AR")}</td>
+      </tr>
+    ))}
+  </tbody>
+
+Reemplazá solo la primera <td> de esa fila (la del nombre):
+
+  <td style={styles.td}>{p.nombre}</td>
+
+por:
+
+  <td style={styles.td}>
+    <div>{p.nombre}</div>
+    {resumenFicha(p) && (
+      <div style={{ fontSize: 11.5, color: "#A68A68", marginTop: 2 }}>
+        {resumenFicha(p)}
+      </div>
+    )}
+  </td>
+
+
+----------------------------------------------------------------------
+CAMBIO 3 — Estadísticas: tabla "Ventas generadas en el período"
+----------------------------------------------------------------------
+
+Buscá esta tabla (columnas Producto / Cant. / Total / Fecha):
+
+  <tbody>
+    {ventasEnRango.map((s) => (
+      <tr key={s.id} className="fila-tabla">
+        <td style={styles.td}>{s.nombre}</td>
+        <td style={{ ...styles.td, textAlign: "right", fontFamily: "'JetBrains Mono', monospace" }}>{s.cantidad}</td>
+        <td style={{ ...styles.td, textAlign: "right", fontFamily: "'JetBrains Mono', monospace" }}>${money(s.total)}</td>
+        <td style={{ ...styles.td, color: "#8A6F52", fontSize: 12.5 }}>{new Date(s.fecha).toLocaleString("es-AR")}</td>
+      </tr>
+    ))}
+  </tbody>
+
+Reemplazala COMPLETA por esta versión (busca el producto vendido en el
+inventario actual para poder mostrar su ficha técnica):
+
+  <tbody>
+    {ventasEnRango.map((s) => {
+      const productoVendido = products.find((pr) => pr.id === s.productId);
+      return (
+        <tr key={s.id} className="fila-tabla">
+          <td style={styles.td}>
+            <div>{s.nombre}</div>
+            {productoVendido && resumenFicha(productoVendido) && (
+              <div style={{ fontSize: 11.5, color: "#A68A68", marginTop: 2 }}>
+                {resumenFicha(productoVendido)}
+              </div>
+            )}
+          </td>
+          <td style={{ ...styles.td, textAlign: "right", fontFamily: "'JetBrains Mono', monospace" }}>{s.cantidad}</td>
+          <td style={{ ...styles.td, textAlign: "right", fontFamily: "'JetBrains Mono', monospace" }}>${money(s.total)}</td>
+          <td style={{ ...styles.td, color: "#8A6F52", fontSize: 12.5 }}>{new Date(s.fecha).toLocaleString("es-AR")}</td>
+        </tr>
+      );
+    })}
+  </tbody>
+
+Nota: si el producto fue eliminado del inventario después de la venta,
+`productoVendido` va a ser undefined y simplemente no se muestra la ficha
+extra — no rompe nada, solo se ve el nombre como antes.
+
+
+----------------------------------------------------------------------
+CAMBIO 4 — Estadísticas: tabla "Cambios y bajas en el período"
+----------------------------------------------------------------------
+
+Buscá esta tabla (columnas Tipo / Detalle / Comentario / Fecha), la que
+está más abajo en el mismo componente Estadisticas:
+
+  <tbody>
+    {ventasEnRango.map((s) => (
+      <tr key={s.id} className="fila-tabla">
+        <td style={styles.td}>{s.nombre}</td>
+        <td style={{ ...styles.td, textAlign: "right", fontFamily: "'JetBrains Mono', monospace" }}>{s.cantidad}</td>
+        <td style={{ ...styles.td, textAlign: "right", fontFamily: "'JetBrains Mono', monospace" }}>${money(s.total)}</td>
+        <td style={{ ...styles.td, color: "#8A6F52", fontSize: 12.5 }}>{new Date(s.fecha).toLocaleString("es-AR")}</td>
+      </tr>
+    ))}
+  </tbody>
+ 
+Reemplazala COMPLETA por esta versión (busca el producto vendido en el
+inventario actual para poder mostrar su ficha técnica):
+ 
+  <tbody>
+    {ventasEnRango.map((s) => {
+      const productoVendido = products.find((pr) => pr.id === s.productId);
+      return (
+        <tr key={s.id} className="fila-tabla">
+          <td style={styles.td}>
+            <div>{s.nombre}</div>
+            {productoVendido && resumenFicha(productoVendido) && (
+              <div style={{ fontSize: 11.5, color: "#A68A68", marginTop: 2 }}>
+                {resumenFicha(productoVendido)}
+              </div>
+            )}
+          </td>
+          <td style={{ ...styles.td, textAlign: "right", fontFamily: "'JetBrains Mono', monospace" }}>{s.cantidad}</td>
+          <td style={{ ...styles.td, textAlign: "right", fontFamily: "'JetBrains Mono', monospace" }}>${money(s.total)}</td>
+          <td style={{ ...styles.td, color: "#8A6F52", fontSize: 12.5 }}>{new Date(s.fecha).toLocaleString("es-AR")}</td>
+        </tr>
+      );
+    })}
+  </tbody>
+OJO: esta misma tabla aparece 2 veces en tu archivo (una en Estadisticas,
+otra en CambiosBajas). Para este cambio, asegurate de estar editando la
+que está DENTRO de `function Estadisticas` (la más abajo en el archivo).
+
+Reemplazala COMPLETA por:
+
+  <tbody>
+    {ajustesEnRango.map((a) => {
+      const original = products.find((pr) => pr.id === a.productoOriginalId);
+      const reemplazo = a.productoReemplazoId
+        ? products.find((pr) => pr.id === a.productoReemplazoId)
+        : null;
+      return (
+        <tr key={a.id} className="fila-tabla">
+          <td style={styles.td}>
+            <span style={{
+              fontSize: 12, fontWeight: 700, padding: "3px 8px", borderRadius: 20,
+              background: a.tipo === "cambio" ? "#F6E7D3" : "#FBEAE9",
+              color: a.tipo === "cambio" ? "#A8754E" : "#B23A34"
+            }}>
+              {a.tipo === "cambio" ? "Cambio" : "Baja"}
+            </span>
+          </td>
+          <td style={styles.td}>
+            <div>
+              {a.tipo === "cambio"
+                ? `${a.cantidadOriginal} × ${a.productoOriginalNombre} → ${a.cantidadReemplazo} × ${a.productoReemplazoNombre}`
+                : `${a.cantidadOriginal} × ${a.productoOriginalNombre}`}
+            </div>
+            {original && resumenFicha(original) && (
+              <div style={{ fontSize: 11, color: "#A68A68", marginTop: 2 }}>
+                {a.productoOriginalNombre}: {resumenFicha(original)}
+              </div>
+            )}
+            {reemplazo && resumenFicha(reemplazo) && (
+              <div style={{ fontSize: 11, color: "#A68A68", marginTop: 1 }}>
+                {a.productoReemplazoNombre}: {resumenFicha(reemplazo)}
+              </div>
+            )}
+          </td>
+          <td style={{ ...styles.td, color: "#8A6F52", fontSize: 13 }}>{a.comentario || "—"}</td>
+          <td style={{ ...styles.td, color: "#8A6F52", fontSize: 12.5 }}>{new Date(a.fecha).toLocaleString("es-AR")}</td>
+        </tr>
+      );
+    })}
+  </tbody>
+
+
+----------------------------------------------------------------------
+RESUMEN
+----------------------------------------------------------------------
+
+Con estos 4 cambios: Lista de precios y las 3 tablas de Estadísticas
+(altas de inventario, ventas, y cambios/bajas) muestran ahora la ficha
+técnica resumida (modelo, color, material, virola, base, guarda) debajo
+del nombre del producto, igual que ya quedó en "Buscar y vender".
+
+Si más adelante también querés esto en la tabla de Inventario, avisame y
+lo agregamos igual — quedó pendiente de una consulta anterior.
       )}
     </div>
   );
@@ -1963,7 +2184,14 @@ function Estadisticas({ products, sales, ajustes }) {
               <tbody>
                 {productosCargados.map((p) => (
                   <tr key={p.id} className="fila-tabla">
-                    <td style={styles.td}>{p.nombre}</td>
+                    <td style={styles.td}>
+    <div>{p.nombre}</div>
+    {resumenFicha(p) && (
+      <div style={{ fontSize: 11.5, color: "#A68A68", marginTop: 2 }}>
+        {resumenFicha(p)}
+      </div>
+    )}
+  </td>
                     <td style={{ ...styles.td, textAlign: "right", fontFamily: "'JetBrains Mono', monospace" }}>${money(p.precio)}</td>
                     <td style={{ ...styles.td, textAlign: "right", fontFamily: "'JetBrains Mono', monospace" }}>{p.stock}</td>
                     <td style={{ ...styles.td, color: "#8A6F52", fontSize: 12.5 }}>{new Date(p.creadoEn).toLocaleDateString("es-AR")}</td>
@@ -1991,15 +2219,26 @@ function Estadisticas({ products, sales, ajustes }) {
                 </tr>
               </thead>
               <tbody>
-                {ventasEnRango.map((s) => (
-                  <tr key={s.id} className="fila-tabla">
-                    <td style={styles.td}>{s.nombre}</td>
-                    <td style={{ ...styles.td, textAlign: "right", fontFamily: "'JetBrains Mono', monospace" }}>{s.cantidad}</td>
-                    <td style={{ ...styles.td, textAlign: "right", fontFamily: "'JetBrains Mono', monospace" }}>${money(s.total)}</td>
-                    <td style={{ ...styles.td, color: "#8A6F52", fontSize: 12.5 }}>{new Date(s.fecha).toLocaleString("es-AR")}</td>
-                  </tr>
-                ))}
-              </tbody>
+                <tbody>
+    {ventasEnRango.map((s) => {
+      const productoVendido = products.find((pr) => pr.id === s.productId);
+      return (
+        <tr key={s.id} className="fila-tabla">
+          <td style={styles.td}>
+            <div>{s.nombre}</div>
+            {productoVendido && resumenFicha(productoVendido) && (
+              <div style={{ fontSize: 11.5, color: "#A68A68", marginTop: 2 }}>
+                {resumenFicha(productoVendido)}
+              </div>
+            )}
+          </td>
+          <td style={{ ...styles.td, textAlign: "right", fontFamily: "'JetBrains Mono', monospace" }}>{s.cantidad}</td>
+          <td style={{ ...styles.td, textAlign: "right", fontFamily: "'JetBrains Mono', monospace" }}>${money(s.total)}</td>
+          <td style={{ ...styles.td, color: "#8A6F52", fontSize: 12.5 }}>{new Date(s.fecha).toLocaleString("es-AR")}</td>
+        </tr>
+      );
+    })}
+  </tbody>
             </table>
           </div>
         )}
@@ -2019,28 +2258,7 @@ function Estadisticas({ products, sales, ajustes }) {
                   <th style={styles.th}>Fecha</th>
                 </tr>
               </thead>
-              <tbody>
-                {ajustesEnRango.map((a) => (
-                  <tr key={a.id} className="fila-tabla">
-                    <td style={styles.td}>
-                      <span style={{
-                        fontSize: 12, fontWeight: 700, padding: "3px 8px", borderRadius: 20,
-                        background: a.tipo === "cambio" ? "#F6E7D3" : "#FBEAE9",
-                        color: a.tipo === "cambio" ? "#A8754E" : "#B23A34"
-                      }}>
-                        {a.tipo === "cambio" ? "Cambio" : "Baja"}
-                      </span>
-                    </td>
-                    <td style={styles.td}>
-                      {a.tipo === "cambio"
-                        ? `${a.cantidadOriginal} × ${a.productoOriginalNombre} → ${a.cantidadReemplazo} × ${a.productoReemplazoNombre}`
-                        : `${a.cantidadOriginal} × ${a.productoOriginalNombre}`}
-                    </td>
-                    <td style={{ ...styles.td, color: "#8A6F52", fontSize: 13 }}>{a.comentario || "—"}</td>
-                    <td style={{ ...styles.td, color: "#8A6F52", fontSize: 12.5 }}>{new Date(a.fecha).toLocaleString("es-AR")}</td>
-                  </tr>
-                ))}
-              </tbody>
+              
             </table>
           </div>
         )}
