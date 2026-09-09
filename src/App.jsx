@@ -313,7 +313,7 @@ function BusinessApp({ session }) {
 
   const loadAll = async () => {
     const [pRes, sRes, aRes] = await Promise.all([
-      supabase.from("products").select("*").order("nombre"),
+      supabase.from("products").select("*").order("nombre").order("modelo").order("id"),
       supabase.from("sales").select("*").order("fecha", { ascending: false }),
       supabase.from("adjustments").select("*").order("fecha", { ascending: false })
     ]);
@@ -758,7 +758,14 @@ function Inventario({ products, lowStockThreshold, onEdit, onDelete, onNuevo }) 
             <tbody>
               {filtered.map((p) => (
                 <tr key={p.id} className="fila-tabla">
-                  <td style={styles.tdImg}>
+                     <td style={styles.td}>
+     <div>{p.nombre}</div>
+     {p.modelo && (
+       <div style={{ fontSize: 11.5, color: "#A68A68", marginTop: 2 }}>
+         {p.modelo}
+       </div>
+     )}
+   </td>
                     {p.foto ? (
                       <img src={p.foto} alt={p.nombre} style={styles.thumb} />
                     ) : (
