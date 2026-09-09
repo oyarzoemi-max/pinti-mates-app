@@ -48,10 +48,11 @@ async function resizeImage(file, maxDimension = 800, quality = 0.72) {
   if (typeof createImageBitmap === "function") {
     let bitmap;
     try {
-      bitmap = await createImageBitmap(file, {
-        resizeWidth: maxDimension,
-        resizeQuality: "low"
-      });
+     bitmap = await createImageBitmap(file, {
+  resizeWidth: maxDimension,
+  resizeQuality: "low",
+  imageOrientation: "from-image"
+});
       return canvasToDataUrl(bitmap, bitmap.width, bitmap.height);
     } catch (error) {
       console.warn("createImageBitmap no pudo procesar la foto; usando método alternativo", error);
