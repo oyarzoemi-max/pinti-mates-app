@@ -758,14 +758,7 @@ function Inventario({ products, lowStockThreshold, onEdit, onDelete, onNuevo }) 
             <tbody>
               {filtered.map((p) => (
                 <tr key={p.id} className="fila-tabla">
-                     <td style={styles.td}>
-     <div>{p.nombre}</div>
-     {p.modelo && (
-       <div style={{ fontSize: 11.5, color: "#A68A68", marginTop: 2 }}>
-         {p.modelo}
-       </div>
-     )}
-   </td>
+                                      <td style={styles.tdImg}>
                     {p.foto ? (
                       <img src={p.foto} alt={p.nombre} style={styles.thumb} />
                     ) : (
@@ -774,6 +767,14 @@ function Inventario({ products, lowStockThreshold, onEdit, onDelete, onNuevo }) 
                       </div>
                     )}
                   </td>
+                  <td style={styles.td}>
+                    <div>{p.nombre}</div>
+                    {p.modelo && (
+                      <div style={{ fontSize: 11.5, color: "#A68A68", marginTop: 2 }}>
+                        {p.modelo}
+                      </div>
+                    )}
+                  </td> 
                   <td style={styles.td}>{p.nombre}</td>
                   <td style={{ ...styles.td, textAlign: "right", fontFamily: "'JetBrains Mono', monospace" }}>
                     ${money(p.precio)}
