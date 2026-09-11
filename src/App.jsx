@@ -1379,15 +1379,18 @@ function VentaPorFoto({ products, onRegister }) {
       ) : selected ? (
         <div style={styles.panel}>
           <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
-            {selected.foto ? (
+                        {selected.foto ? (
               <img
                 src={selected.foto}
                 alt={selected.nombre}
-                style={{ width: 84, height: 84, borderRadius: 8, objectFit: "cover", flexShrink: 0 }}
+                style={{
+                  width: 81, height: 144, borderRadius: 8, objectFit: "contain",
+                  background: "#F3E7D3", flexShrink: 0
+                }}
               />
             ) : (
               <div style={{
-                width: 84, height: 84, borderRadius: 8, background: "#F3E7D3",
+                width: 81, height: 144, borderRadius: 8, background: "#F3E7D3",
                 display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0
               }}>
                 <ImageOff size={20} color="#A68A68" />
@@ -1472,11 +1475,14 @@ function VentaPorFoto({ products, onRegister }) {
                     textAlign: "left", opacity: p.stock <= 0 ? 0.55 : 1
                   }}
                 >
-                  <img
+                                   <img
                     src={p.foto}
                     alt={p.nombre}
-                    style={{ width: 64, height: 64, borderRadius: 8, objectFit: "cover", flexShrink: 0 }}
-                  />
+                    style={{
+                      width: 54, height: 96, borderRadius: 8, objectFit: "contain",
+                      background: "#F3E7D3", flexShrink: 0
+                    }}
+                  /> 
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{
                       fontWeight: 700, fontSize: 14.5, whiteSpace: "nowrap",
