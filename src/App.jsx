@@ -1385,13 +1385,13 @@ function VentaPorFoto({ products, onRegister }) {
                 src={selected.foto}
                 alt={selected.nombre}
                 style={{
-                  width: 81, height: 144, borderRadius: 8, objectFit: "contain",
+                  width: 90, height: 120, borderRadius: 8, objectFit: "contain",
                   background: "#F3E7D3", flexShrink: 0
                 }}
               />
             ) : (
               <div style={{
-                width: 81, height: 144, borderRadius: 8, background: "#F3E7D3",
+                width: 90, height: 120, borderRadius: 8, background: "#F3E7D3",
                 display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0
               }}>
                 <ImageOff size={20} color="#A68A68" />
@@ -1480,7 +1480,7 @@ function VentaPorFoto({ products, onRegister }) {
                     src={p.foto}
                     alt={p.nombre}
                     style={{
-                      width: 54, height: 96, borderRadius: 8, objectFit: "contain",
+                      width: 60, height: 80, borderRadius: 8, objectFit: "contain",
                       background: "#F3E7D3", flexShrink: 0
                     }}
                   /> 
